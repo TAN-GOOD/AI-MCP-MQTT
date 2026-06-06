@@ -47,7 +47,37 @@
 
 ## 安装步骤
 
-### 第一步：下载代码
+### 方式一：Ubuntu 一键安装（最简单）
+
+只需要一条命令，自动完成所有安装步骤：
+
+```bash
+curl -fsSL https://gitee.com/T510/ai-xiaozhi-mcp/raw/master/install.sh | bash
+```
+
+或者先下载再执行：
+
+```bash
+wget https://gitee.com/T510/ai-xiaozhi-mcp/raw/master/install.sh
+chmod +x install.sh
+./install.sh
+```
+
+脚本会自动完成以下操作：
+1. 检测并安装 Python 3.11
+2. 检测并安装 MySQL
+3. 创建数据库和用户
+4. 克隆项目代码到 `~/ai-xiaozhi-mcp`
+5. 创建虚拟环境并安装依赖
+6. 生成配置文件
+7. 初始化数据库表
+8. 注册为系统服务（开机自启）
+
+安装完成后会显示访问地址和数据库密码，请妥善保存。
+
+### 方式二：手动安装
+
+#### 第一步：下载代码
 
 打开命令行，执行：
 
@@ -338,6 +368,7 @@ ai-xiaozhi-mcp/
 ├── .gitignore              # Git 忽略规则
 ├── Dockerfile              # Docker 镜像构建文件
 ├── docker-compose.yml      # Docker 一键部署配置
+├── install.sh              # Ubuntu 一键安装脚本
 ├── requirements.txt        # Python 依赖清单
 ├── run.py                  # 启动入口
 ├── init_db.py              # 数据库初始化脚本
