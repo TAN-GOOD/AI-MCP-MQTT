@@ -7,7 +7,8 @@ YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m'
 
-REPO_URL="https://gitee.com/T510/ai-xiaozhi-mcp.git"
+REPO_URL_SSH="git@gitee.com:T510/ai-xiaozhi-mcp.git"
+REPO_URL_HTTPS="https://gitee.com/T510/ai-xiaozhi-mcp.git"
 INSTALL_DIR="$HOME/ai-xiaozhi-mcp"
 MYSQL_ROOT_PASSWORD="xiaozhi_$(openssl rand -hex 6 2>/dev/null || echo 'mcp2024secure')"
 DB_NAME="xiaozhi_mcp"
@@ -60,19 +61,29 @@ install_system_deps() {
 }
 
 install_python() {
+    local py_ver=""
+    local minor=""
+
     if command -v python3 &>/dev/null; then
-        local py_ver=$(python3 -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')")
+        py_ver=$(python3 -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')")
         local major=$(echo "$py_ver" | cut -d. -f1)
-        local minor=$(echo "$py_ver" | cut -d. -f2)
-        if [ "$major" -ge 3 ] && [ "$minor" -ge 9 ]; then
-            ok "Python $py_ver 已安装"
+        minor=$(echo "$py_ver" | cut -d. -f2)
+    fi
+
+    if [ -n "$py_ver" ]; then
+        local venv_pkg="python${py_ver}-venv"
+        if ! dpkg -l | grep -q "$venv_pkg"; then
+            info "安装 $venv_pkg..."
+            sudo apt-get install -y -qq "$venv_pkg"
+        fi
+
+        if python3 -m venv --help &>/dev/null; then
+            ok "Python $py_ver 已就绪（含 venv）"
             return
-        else
-            warn "Python $py_ver 版本过低，需要 3.9+"
         fi
     fi
 
-    info "安装 Python 3.11..."
+    info "安装 Python 3.11 及 venv..."
     sudo add-apt-repository -y ppa:deadsnakes/ppa 2>/dev/null || true
     sudo apt-get update -qq
     sudo apt-get install -y -qq python3.11 python3.11-venv python3.11-dev python3-pip
@@ -155,8 +166,18 @@ clone_repo() {
         ok "代码更新完成"
     else
         info "克隆项目代码..."
-        git clone --quiet "$REPO_URL" "$INSTALL_DIR"
-        ok "代码克隆完成"
+        if git clone --quiet "$REPO_URL_SSH" "$INSTALL_DIR" 2>/dev/null; then
+            ok "代码克隆完成（SSH）"
+        else
+            info "SSH 方式失败，尝试 HTTPS..."
+            GIT_TERMINAL_PROMPT=0 git clone --quiet "$REPO_URL_HTTPS" "$INSTALL_DIR" 2>/dev/null
+            if [ $? -ne 0 ]; then
+                error "克隆失败，请检查网络或手动克隆："
+                error "  git clone $REPO_URL_SSH $INSTALL_DIR"
+                exit 1
+            fi
+            ok "代码克隆完成（HTTPS）"
+        fi
     fi
     cd "$INSTALL_DIR"
 }
