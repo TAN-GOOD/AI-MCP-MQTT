@@ -166,17 +166,20 @@ clone_repo() {
         ok "代码更新完成"
     else
         info "克隆项目代码..."
-        if git clone --quiet "$REPO_URL_SSH" "$INSTALL_DIR" 2>/dev/null; then
+        mkdir -p ~/.ssh
+        ssh-keyscan gitee.com >> ~/.ssh/known_hosts 2>/dev/null
+
+        if GIT_SSH_COMMAND="ssh -o StrictHostKeyChecking=no" git clone --quiet "$REPO_URL_SSH" "$INSTALL_DIR" 2>/dev/null; then
             ok "代码克隆完成（SSH）"
         else
             info "SSH 方式失败，尝试 HTTPS..."
-            GIT_TERMINAL_PROMPT=0 git clone --quiet "$REPO_URL_HTTPS" "$INSTALL_DIR" 2>/dev/null
-            if [ $? -ne 0 ]; then
-                error "克隆失败，请检查网络或手动克隆："
-                error "  git clone $REPO_URL_SSH $INSTALL_DIR"
+            if git clone --quiet "$REPO_URL_HTTPS" "$INSTALL_DIR" 2>/dev/null; then
+                ok "代码克隆完成（HTTPS）"
+            else
+                error "克隆失败，请手动克隆后重新运行："
+                error "  git clone $REPO_URL_SSH ~/ai-xiaozhi-mcp"
                 exit 1
             fi
-            ok "代码克隆完成（HTTPS）"
         fi
     fi
     cd "$INSTALL_DIR"
