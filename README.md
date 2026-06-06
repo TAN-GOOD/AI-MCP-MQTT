@@ -162,6 +162,109 @@ INFO:     Application startup complete.
 
 打开浏览器访问：**http://localhost:8000**
 
+---
+
+## Docker 部署（推荐）
+
+如果你不想手动安装 Python 和 MySQL，Docker 是最简单的方式。**一条命令搞定所有环境。**
+
+### 前提条件
+
+安装 Docker Desktop：
+
+- **Windows**：https://docs.docker.com/desktop/install/windows-install/
+- **Mac**：https://docs.docker.com/desktop/install/mac-install/
+- **Linux**：https://docs.docker.com/engine/install/
+
+安装后打开终端，输入 `docker --version` 看到版本号说明安装成功。
+
+### 第一步：下载代码
+
+```bash
+git clone https://gitee.com/T510/ai-xiaozhi-mcp.git
+cd ai-xiaozhi-mcp
+```
+
+### 第二步：修改配置（可选）
+
+编辑 `docker-compose.yml`，找到以下几行，改成你自己的密码：
+
+```yaml
+# MySQL root 密码（两个地方要保持一致）
+MYSQL_ROOT_PASSWORD: xiaozhi123456          # 改这里
+DATABASE_URL: mysql+pymysql://root:xiaozhi123456@db:3306/xiaozhi_mcp  # 和上面一样
+
+# JWT 密钥（随便改一个复杂的字符串）
+SECRET_KEY: change-this-to-a-random-string-in-production
+```
+
+> 💡 如果只是本地测试，不改也能用。
+
+### 第三步：一键启动
+
+```bash
+docker compose up -d
+```
+
+第一次运行会自动下载 MySQL 和 Python 镜像，大约需要 2-5 分钟（取决于网速）。之后启动只需要几秒。
+
+看到类似以下输出说明启动成功：
+
+```
+[+] Running 3/3
+ ✔ Network xiaozhi-mcp_default    Created
+ ✔ Container xiaozhi-mysql        Healthy
+ ✔ Container xiaozhi-app          Started
+```
+
+### 第四步：初始化数据库
+
+第一次启动后需要初始化数据库表：
+
+```bash
+docker exec xiaozhi-app python init_db.py
+```
+
+看到 `数据库表创建完成！` 就成功了。
+
+### 第五步：访问
+
+打开浏览器访问：**http://localhost:8000**
+
+### 常用 Docker 命令
+
+```bash
+# 查看运行状态
+docker compose ps
+
+# 查看实时日志
+docker compose logs -f app
+
+# 停止服务
+docker compose down
+
+# 停止并删除数据库数据（慎用！会清空所有数据）
+docker compose down -v
+
+# 重新构建并启动（代码更新后执行）
+docker compose up -d --build
+
+# 进入应用容器内部（调试用）
+docker exec -it xiaozhi-app bash
+```
+
+### 代码更新后如何部署？
+
+```bash
+# 拉取最新代码
+git pull
+
+# 重新构建并重启
+docker compose up -d --build
+```
+
+---
+
 ## 使用指南
 
 ### 1. 注册和登录
@@ -230,8 +333,11 @@ INFO:     Application startup complete.
 
 ```
 ai-xiaozhi-mcp/
+├── .dockerignore           # Docker 构建忽略规则
 ├── .env.example            # 环境变量模板
 ├── .gitignore              # Git 忽略规则
+├── Dockerfile              # Docker 镜像构建文件
+├── docker-compose.yml      # Docker 一键部署配置
 ├── requirements.txt        # Python 依赖清单
 ├── run.py                  # 启动入口
 ├── init_db.py              # 数据库初始化脚本

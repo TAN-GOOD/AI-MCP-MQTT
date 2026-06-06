@@ -1,0 +1,36 @@
+services:
+  db:
+    image: mysql:8.0
+    container_name: xiaozhi-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: xiaozhi123456
+      MYSQL_DATABASE: xiaozhi_mcp
+      MYSQL_CHARACTER_SET_SERVER: utf8mb4
+      MYSQL_COLLATION_SERVER: utf8mb4_unicode_ci
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-p$$MYSQL_ROOT_PASSWORD"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  app:
+    build: .
+    container_name: xiaozhi-app
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      DATABASE_URL: mysql+pymysql://root:xiaozhi123456@db:3306/xiaozhi_mcp
+      SECRET_KEY: change-this-to-a-random-string-in-production
+      ACCESS_TOKEN_EXPIRE_MINUTES: "1440"
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  mysql_data:
