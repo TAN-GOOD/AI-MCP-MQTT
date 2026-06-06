@@ -123,13 +123,26 @@ install_mysql() {
 setup_mysql() {
     info "配置 MySQL 数据库..."
 
-    sudo mysql -u root <<EOF
-ALTER USER '$DB_USER'@'localhost' IDENTIFIED WITH mysql_native_password BY '$MYSQL_ROOT_PASSWORD';
+    if sudo mysql -u root -e "SELECT 1" &>/dev/null; then
+        sudo mysql -u root <<EOF
+ALTER USER 'root'@'localhost' IDENTIFIED WITH mysql_native_password BY '$MYSQL_ROOT_PASSWORD';
 FLUSH PRIVILEGES;
 CREATE DATABASE IF NOT EXISTS $DB_NAME CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
-GRANT ALL PRIVILEGES ON $DB_NAME.* TO '$DB_USER'@'localhost';
+GRANT ALL PRIVILEGES ON $DB_NAME.* TO 'root'@'localhost';
 FLUSH PRIVILEGES;
 EOF
+    elif mysql -u root -p"$MYSQL_ROOT_PASSWORD" -e "SELECT 1" &>/dev/null; then
+        mysql -u root -p"$MYSQL_ROOT_PASSWORD" <<EOF
+CREATE DATABASE IF NOT EXISTS $DB_NAME CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+GRANT ALL PRIVILEGES ON $DB_NAME.* TO 'root'@'localhost';
+FLUSH PRIVILEGES;
+EOF
+        ok "数据库已存在，已复用"
+        return
+    else
+        error "MySQL 无法连接，请手动检查 MySQL 配置"
+        exit 1
+    fi
 
     ok "数据库 $DB_NAME 创建完成"
 }
@@ -173,6 +186,7 @@ install_pip_deps() {
 create_env() {
     if [ -f "$INSTALL_DIR/.env" ]; then
         warn ".env 文件已存在，跳过生成"
+        MYSQL_ROOT_PASSWORD=$(grep DATABASE_URL "$INSTALL_DIR/.env" | sed 's/.*:([^@]*)@.*/\1/' | grep -oP '(?<=:)[^@]+(?=@)' || echo "$MYSQL_ROOT_PASSWORD")
         return
     fi
 
