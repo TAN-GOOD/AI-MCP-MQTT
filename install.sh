@@ -134,6 +134,16 @@ install_mysql() {
 setup_mysql() {
     info "配置 MySQL 数据库..."
 
+    local env_file="$INSTALL_DIR/.env"
+    local saved_pw=""
+    if [ -f "$env_file" ]; then
+        saved_pw=$(grep DATABASE_URL "$env_file" 2>/dev/null | grep -oP '(?<=:)[^@]+(?=@)' || true)
+        if [ -n "$saved_pw" ]; then
+            MYSQL_ROOT_PASSWORD="$saved_pw"
+            warn "从已有 .env 读取数据库密码"
+        fi
+    fi
+
     if sudo mysql -u root -e "SELECT 1" &>/dev/null; then
         sudo mysql -u root <<EOF
 ALTER USER 'root'@'localhost' IDENTIFIED WITH mysql_native_password BY '$MYSQL_ROOT_PASSWORD';
@@ -148,14 +158,33 @@ CREATE DATABASE IF NOT EXISTS $DB_NAME CHARACTER SET utf8mb4 COLLATE utf8mb4_uni
 GRANT ALL PRIVILEGES ON $DB_NAME.* TO 'root'@'localhost';
 FLUSH PRIVILEGES;
 EOF
-        ok "数据库已存在，已复用"
-        return
     else
-        error "MySQL 无法连接，请手动检查 MySQL 配置"
-        exit 1
+        error "MySQL 无法连接，尝试重置 root 密码..."
+        sudo systemctl stop mysql
+        sudo mysqld_safe --skip-grant-tables &>/dev/null &
+        sleep 3
+        mysql -u root <<EOF
+FLUSH PRIVILEGES;
+ALTER USER 'root'@'localhost' IDENTIFIED WITH mysql_native_password BY '$MYSQL_ROOT_PASSWORD';
+FLUSH PRIVILEGES;
+EOF
+        sudo killall mysqld 2>/dev/null || true
+        sleep 2
+        sudo systemctl start mysql
+        sleep 2
+
+        if mysql -u root -p"$MYSQL_ROOT_PASSWORD" -e "SELECT 1" &>/dev/null; then
+            mysql -u root -p"$MYSQL_ROOT_PASSWORD" -e "CREATE DATABASE IF NOT EXISTS $DB_NAME CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
+            ok "MySQL 密码已重置"
+        else
+            error "MySQL 配置失败，请手动执行："
+            error "  sudo mysql"
+            error "  ALTER USER 'root'@'localhost' IDENTIFIED WITH mysql_native_password BY '你的密码';"
+            exit 1
+        fi
     fi
 
-    ok "数据库 $DB_NAME 创建完成"
+    ok "数据库 $DB_NAME 就绪"
 }
 
 clone_repo() {
