@@ -123,16 +123,13 @@ install_mysql() {
 setup_mysql() {
     info "配置 MySQL 数据库..."
 
-    sudo mysql -u root <<EOF 2>/dev/null || mysql -u root -p"$MYSQL_ROOT_PASSWORD" <<EOF2
+    sudo mysql -u root <<EOF
+ALTER USER '$DB_USER'@'localhost' IDENTIFIED WITH mysql_native_password BY '$MYSQL_ROOT_PASSWORD';
+FLUSH PRIVILEGES;
 CREATE DATABASE IF NOT EXISTS $DB_NAME CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
-CREATE USER IF NOT EXISTS '$DB_USER'@'localhost' IDENTIFIED BY '$MYSQL_ROOT_PASSWORD';
 GRANT ALL PRIVILEGES ON $DB_NAME.* TO '$DB_USER'@'localhost';
 FLUSH PRIVILEGES;
 EOF
-CREATE DATABASE IF NOT EXISTS $DB_NAME CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
-GRANT ALL PRIVILEGES ON $DB_NAME.* TO '$DB_USER'@'localhost';
-FLUSH PRIVILEGES;
-EOF2
 
     ok "数据库 $DB_NAME 创建完成"
 }
