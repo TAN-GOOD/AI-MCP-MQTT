@@ -21,8 +21,8 @@ warn()  { echo -e "${YELLOW}[注意]${NC} $1"; }
 error() { echo -e "${RED}[错误]${NC} $1"; }
 
 check_root() {
-    if [ "$(id -u)" -eq 0 ]; then
-        warn "检测到以 root 用户运行，建议使用普通用户"
+    if [ "$(id -u)" -ne 0 ]; then
+        warn "建议使用 sudo 或 root 用户运行此脚本"
         read -p "是否继续？(y/n): " choice </dev/tty
         if [ "$choice" != "y" ] && [ "$choice" != "Y" ]; then
             exit 0
