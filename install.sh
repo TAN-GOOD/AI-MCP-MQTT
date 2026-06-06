@@ -161,25 +161,35 @@ EOF
     else
         error "MySQL 无法连接，尝试重置 root 密码..."
         sudo systemctl stop mysql
-        sudo mysqld_safe --skip-grant-tables &>/dev/null &
+        sleep 2
+        sudo mkdir -p /var/run/mysqld
+        sudo chown mysql:mysql /var/run/mysqld
+        sudo systemctl set-environment MYSQLD_OPTS="--skip-grant-tables --skip-networking"
+        sudo systemctl start mysql
         sleep 3
+
         mysql -u root <<EOF
 FLUSH PRIVILEGES;
 ALTER USER 'root'@'localhost' IDENTIFIED WITH mysql_native_password BY '$MYSQL_ROOT_PASSWORD';
 FLUSH PRIVILEGES;
 EOF
-        sudo killall mysqld 2>/dev/null || true
+
+        sudo systemctl stop mysql
         sleep 2
+        sudo systemctl unset-environment MYSQLD_OPTS
         sudo systemctl start mysql
-        sleep 2
+        sleep 3
 
         if mysql -u root -p"$MYSQL_ROOT_PASSWORD" -e "SELECT 1" &>/dev/null; then
             mysql -u root -p"$MYSQL_ROOT_PASSWORD" -e "CREATE DATABASE IF NOT EXISTS $DB_NAME CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
             ok "MySQL 密码已重置"
         else
-            error "MySQL 配置失败，请手动执行："
-            error "  sudo mysql"
-            error "  ALTER USER 'root'@'localhost' IDENTIFIED WITH mysql_native_password BY '你的密码';"
+            error "MySQL 配置失败，请手动执行以下命令："
+            error "  sudo systemctl stop mysql"
+            error "  sudo systemctl set-environment MYSQLD_OPTS='--skip-grant-tables'"
+            error "  sudo systemctl start mysql"
+            error "  mysql -u root -e \"ALTER USER 'root'@'localhost' IDENTIFIED WITH mysql_native_password BY '你的密码';\""
+            error "  sudo systemctl stop mysql && sudo systemctl unset-environment MYSQLD_OPTS && sudo systemctl start mysql"
             exit 1
         fi
     fi
