@@ -222,6 +222,62 @@ ai-xiaozhi-mcp/
 
 ---
 
+## 📝 提交说明规范
+
+本项目使用中文提交说明格式，确保提交历史清晰易读。
+
+### 安装配置
+
+```bash
+# 运行安装脚本配置git环境
+bash scripts/setup-commit-msg.sh
+```
+
+### 提交说明格式
+
+```
+<类型>(<范围>): <主题>
+```
+
+### 类型说明
+
+| 类型 | 说明 |
+|------|------|
+| feat | 新功能 |
+| fix | 修复bug |
+| docs | 文档更新 |
+| style | 代码格式调整（不影响功能） |
+| refactor | 重构（既不修复bug也不添加功能） |
+| perf | 性能优化 |
+| test | 添加/修改测试 |
+| build | 构建系统或外部依赖变更 |
+| ci | CI配置变更 |
+| chore | 其他杂项修改 |
+| revert | 回滚提交 |
+
+### 范围说明（可选）
+
+auth, project, tool, mqtt, mcp, database, api, ui, config, deps
+
+### 示例
+
+```bash
+feat(auth): 添加用户注册功能
+fix(mqtt): 修复连接断开后无法重连的问题
+docs: 更新README安装说明
+refactor(api): 优化项目查询接口性能
+feat(ui): 添加实时日志WebSocket显示
+fix(database): 修复项目删除时关联工具未清理的问题
+```
+
+### 注意事项
+
+- 主题行使用中文，不超过50个字符
+- 主题行不加句号
+- 空一行后可添加详细说明（可选）
+
+---
+
 ## 📄 许可证
 
 [MIT License](LICENSE) - 随便用，随便改。

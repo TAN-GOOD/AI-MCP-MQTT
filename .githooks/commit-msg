@@ -1,0 +1,60 @@
+#!/bin/bash
+#
+# commit-msg 钩子
+# 验证提交说明是否符合中文规范格式
+#
+
+COMMIT_MSG_FILE=$1
+COMMIT_MSG=$(cat "$COMMIT_MSG_FILE")
+
+# 跳过合并提交和amend
+if echo "$COMMIT_MSG" | grep -q "^Merge "; then
+    exit 0
+fi
+
+# 跳过回滚提交
+if echo "$COMMIT_MSG" | grep -q "^Revert "; then
+    exit 0
+fi
+
+# 定义有效的类型
+VALID_TYPES="feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert"
+
+# 提取第一行（主题行）
+FIRST_LINE=$(echo "$COMMIT_MSG" | head -n 1)
+
+# 检查是否符合格式：<类型>(<范围>): <主题>
+if ! echo "$FIRST_LINE" | grep -qE "^($VALID_TYPES)(\([a-z]+\))?: .+"; then
+    echo "错误：提交说明格式不正确！"
+    echo ""
+    echo "正确格式：<类型>(<范围>): <主题>"
+    echo ""
+    echo "类型：feat, fix, docs, style, refactor, perf, test, build, ci, chore, revert"
+    echo "范围（可选）：auth, project, tool, mqtt, mcp, database, api, ui, config, deps"
+    echo ""
+    echo "示例："
+    echo "  feat(auth): 添加用户注册功能"
+    echo "  fix(mqtt): 修复连接断开后无法重连的问题"
+    echo "  docs: 更新README安装说明"
+    echo ""
+    echo "您的提交说明："
+    echo "$FIRST_LINE"
+    exit 1
+fi
+
+# 检查主题行长度（不超过50个字符）
+SUBJECT_LENGTH=$(echo "$FIRST_LINE" | wc -c)
+if [ "$SUBJECT_LENGTH" -gt 51 ]; then  # 51 because wc -c counts the newline
+    echo "警告：提交说明主题行超过50个字符（当前：$SUBJECT_LENGTH 字符）"
+    echo "建议使用更简洁的描述。"
+    # 这只是一个警告，不阻止提交
+fi
+
+# 检查主题行是否包含中文字符
+if ! echo "$FIRST_LINE" | grep -qP "[\x{4e00}-\x{9fff}]"; then
+    echo "提示：建议在提交说明中使用中文字符"
+    echo "示例：feat(auth): 添加用户注册功能"
+    # 这只是一个提示，不阻止提交
+fi
+
+exit 0

@@ -1,0 +1,57 @@
+#!/bin/bash
+#
+# prepare-commit-msg 钩子
+# 在提交时自动插入中文提交说明模板
+#
+
+COMMIT_MSG_FILE=$1
+COMMIT_SOURCE=$2
+
+# 如果是合并提交或amend，跳过
+if [ "$COMMIT_SOURCE" = "merge" ] || [ "$COMMIT_SOURCE" = "squash" ]; then
+    exit 0
+fi
+
+# 获取模板文件路径
+TEMPLATE_FILE="$(git rev-parse --show-toplevel)/.gitmessage"
+
+# 如果模板文件不存在，跳过
+if [ ! -f "$TEMPLATE_FILE" ]; then
+    exit 0
+fi
+
+# 如果是交互式提交或编辑提交，跳过
+if [ "$COMMIT_SOURCE" = "message" ] || [ "$COMMIT_SOURCE" = "template" ] || [ "$COMMIT_SOURCE" = "commit" ]; then
+    exit 0
+fi
+
+# 为新的提交插入模板
+if [ -z "$COMMIT_SOURCE" ]; then
+    # 保留用户输入的内容
+    USER_CONTENT=$(cat "$COMMIT_MSG_FILE")
+    
+    # 如果用户没有输入任何内容，插入模板
+    if [ -z "$USER_CONTENT" ] || [ "$USER_CONTENT" = "# 请在此处输入提交说明..." ]; then
+        # 获取当前分支信息
+        BRANCH=$(git symbolic-ref --short HEAD 2>/dev/null)
+        
+        # 生成模板内容
+        cat > "$COMMIT_MSG_FILE" << EOF
+# 请在此处输入提交说明...
+# 
+# 格式：<类型>(<范围>): <主题>
+#
+# 类型：feat, fix, docs, style, refactor, perf, test, build, ci, chore, revert
+# 范围（可选）：auth, project, tool, mqtt, mcp, database, api, ui, config, deps
+#
+# 示例：
+#   feat(auth): 添加用户注册功能
+#   fix(mqtt): 修复连接断开后无法重连的问题
+#   docs: 更新README安装说明
+#
+# 注意：主题行使用中文，不超过50个字符
+EOF
+    fi
+fi
+
+exit 0
