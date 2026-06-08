@@ -14,6 +14,9 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       id-token: write
+      contents: write
+      pull-requests: write
+      issues: write
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
@@ -25,3 +28,4 @@ jobs:
         uses: anomalyco/opencode/github@latest
         with:
           model: opencode/mimo-v2.5-free
+          share: true
