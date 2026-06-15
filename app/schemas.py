@@ -7,6 +7,8 @@ class UserCreate(BaseModel):
     username: str = Field(..., min_length=3, max_length=50)
     email: str = Field(..., max_length=100)
     password: str = Field(..., min_length=6, max_length=100)
+    captcha_id: str
+    captcha_code: str
 
 
 class UserLogin(BaseModel):
