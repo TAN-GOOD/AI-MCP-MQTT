@@ -168,6 +168,26 @@ pip install -r requirements.txt
 - Docker 部署：编辑 `docker-compose.yml`，改 `ports: - "8000:8000"` 前面的数字
 </details>
 
+<details>
+<summary><b>🔄 Docker 部署后代码怎么更新？</b></summary>
+
+```bash
+# 1. 进入项目目录
+cd ~/ai-xiaozhi-mcp
+
+# 2. 拉取最新代码
+git pull
+
+# 3. 重新构建镜像并重启（数据库数据不会丢失）
+docker compose up -d --build
+
+# 4. 如果数据库表结构有变化，需要重新初始化
+docker exec xiaozhi-app python init_db.py
+```
+
+> ⚠️ `docker compose up -d --build` 只会重建应用容器，MySQL 数据容器不受影响。
+</details>
+
 ---
 
 ## 📡 API 接口
