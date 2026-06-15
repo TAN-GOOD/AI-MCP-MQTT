@@ -1,15 +1,31 @@
 from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi.responses import Response
 from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models import User
 from app.schemas import UserCreate, UserLogin, UserResponse, Token
 from app.auth import get_password_hash, verify_password, create_access_token, get_current_user
+from app.services.captcha_service import create_captcha, verify_captcha
 
 router = APIRouter(prefix="/api/auth", tags=["认证"])
 
 
+@router.get("/captcha")
+def get_captcha():
+    captcha_id, svg = create_captcha()
+    return {
+        "captcha_id": captcha_id,
+        "image": svg,
+    }
+
+
 @router.post("/register", response_model=UserResponse)
 def register(user_data: UserCreate, db: Session = Depends(get_db)):
+    if not verify_captcha(user_data.captcha_id, user_data.captcha_code):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="验证码错误或已过期"
+        )
     existing_user = db.query(User).filter(
         (User.username == user_data.username) | (User.email == user_data.email)
     ).first()

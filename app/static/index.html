@@ -852,6 +852,14 @@
                         <label class="form-label">密码</label>
                         <input type="password" id="reg-password" required minlength="6" class="input" placeholder="至少6个字符">
                     </div>
+                    <div class="form-group">
+                        <label class="label">验证码</label>
+                        <div style="display:flex;gap:8px;align-items:center">
+                            <input type="text" id="reg-captcha" required maxlength="4" class="input" placeholder="输入验证码" style="flex:1;text-transform:uppercase">
+                            <div id="captcha-image" style="cursor:pointer;height:40px;shrink:0" title="点击刷新"></div>
+                        </div>
+                    </div>
+                    <input type="hidden" id="reg-captcha-id">
                     <button type="submit" class="btn btn-primary btn-full">注册</button>
                 </form>
 
@@ -1177,6 +1185,7 @@
             document.getElementById('login-tab').className = tab === 'login' ? 'auth-tab auth-tab-active' : 'auth-tab auth-tab-inactive';
             document.getElementById('register-tab').className = tab === 'register' ? 'auth-tab auth-tab-active' : 'auth-tab auth-tab-inactive';
             document.getElementById('auth-error').classList.add('hidden');
+            if (tab === 'register') loadCaptcha();
         }
 
         async function handleLogin(e) {
@@ -1202,7 +1211,9 @@
                     body: JSON.stringify({
                         username: document.getElementById('reg-username').value,
                         email: document.getElementById('reg-email').value,
-                        password: document.getElementById('reg-password').value
+                        password: document.getElementById('reg-password').value,
+                        captcha_id: document.getElementById('reg-captcha-id').value,
+                        captcha_code: document.getElementById('reg-captcha').value
                     })
                 });
                 showToast('注册成功，请登录', 'success');
@@ -1210,6 +1221,7 @@
                 document.getElementById('login-username').value = document.getElementById('reg-username').value;
             } catch (err) {
                 showAuthError(err.message);
+                loadCaptcha();
             }
         }
 
@@ -1217,6 +1229,14 @@
             const el = document.getElementById('auth-error');
             el.textContent = msg;
             el.classList.remove('hidden');
+        }
+
+        async function loadCaptcha() {
+            try {
+                const data = await api('/api/auth/captcha');
+                document.getElementById('reg-captcha-id').value = data.captcha_id;
+                document.getElementById('captcha-image').innerHTML = data.image;
+            } catch {}
         }
 
         function logout() {
@@ -1678,7 +1698,10 @@
         (async () => {
             if (token) {
                 await loadDashboard();
+            } else {
+                loadCaptcha();
             }
+            document.getElementById('captcha-image').addEventListener('click', loadCaptcha);
         })();
     </script>
 </body>
