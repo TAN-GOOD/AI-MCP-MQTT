@@ -6,6 +6,25 @@
     <title>小智MCP-MQTT管理系统</title>
     <style>
         :root {
+            --bg: #ffffff;
+            --surface: #f8f9fa;
+            --elevated: #ffffff;
+            --border: #e2e5e9;
+            --text: #1a1a2e;
+            --text-secondary: #6b7280;
+            --text-tertiary: #9ca3af;
+            --accent: #6366f1;
+            --accent-hover: #4f46e5;
+            --success: #16a34a;
+            --error: #dc2626;
+            --warning: #d97706;
+            --radius: 6px;
+            --radius-lg: 8px;
+            --shadow: 0 1px 3px rgba(0,0,0,0.08);
+            --shadow-lg: 0 4px 12px rgba(0,0,0,0.1);
+        }
+
+        [data-theme="dark"] {
             --bg: #0a0a0b;
             --surface: #141415;
             --elevated: #1c1c1e;
@@ -18,8 +37,8 @@
             --success: #22c55e;
             --error: #ef4444;
             --warning: #f59e0b;
-            --radius: 6px;
-            --radius-lg: 8px;
+            --shadow: none;
+            --shadow-lg: 0 4px 24px rgba(0,0,0,0.5);
         }
 
         *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -282,6 +301,26 @@
             font-size: 13px;
             color: var(--text-secondary);
         }
+        .theme-toggle {
+            background: none;
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            color: var(--text-secondary);
+            cursor: pointer;
+            width: 36px;
+            height: 36px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px;
+            transition: all 0.15s;
+            flex-shrink: 0;
+        }
+        .theme-toggle:hover {
+            background: var(--elevated);
+            color: var(--text);
+            border-color: var(--accent);
+        }
 
         /* ===== DASHBOARD ===== */
         .dashboard-content {
@@ -316,9 +355,10 @@
             border-radius: var(--radius-lg);
             padding: 20px;
             cursor: pointer;
-            transition: border-color 0.15s;
+            transition: border-color 0.15s, box-shadow 0.15s;
+            box-shadow: var(--shadow);
         }
-        .project-card:hover { border-color: #3a3a3f; }
+        .project-card:hover { border-color: var(--accent); box-shadow: var(--shadow-lg); }
         .project-card-header {
             display: flex;
             align-items: flex-start;
@@ -876,6 +916,7 @@
                         <span class="nav-desc">物联网设备管理系统</span>
                     </div>
                     <div class="nav-right">
+                        <button class="theme-toggle" onclick="toggleTheme()" title="切换主题" id="theme-btn">☀️</button>
                         <span id="user-display" class="nav-user"></span>
                         <button onclick="logout()" class="btn btn-secondary btn-sm">退出</button>
                     </div>
@@ -1230,6 +1271,25 @@
             el.textContent = msg;
             el.classList.remove('hidden');
         }
+
+        function toggleTheme() {
+            const html = document.documentElement;
+            const current = html.getAttribute('data-theme');
+            const next = current === 'dark' ? 'light' : 'dark';
+            html.setAttribute('data-theme', next);
+            localStorage.setItem('theme', next);
+            document.getElementById('theme-btn').textContent = next === 'dark' ? '🌙' : '☀️';
+        }
+
+        (function initTheme() {
+            const saved = localStorage.getItem('theme');
+            const theme = saved || 'light';
+            document.documentElement.setAttribute('data-theme', theme);
+            document.addEventListener('DOMContentLoaded', () => {
+                const btn = document.getElementById('theme-btn');
+                if (btn) btn.textContent = theme === 'dark' ? '🌙' : '☀️';
+            });
+        })();
 
         async function loadCaptcha() {
             try {
