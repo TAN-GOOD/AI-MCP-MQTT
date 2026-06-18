@@ -127,6 +127,8 @@ async def start_project(
             "tool_type": tool.tool_type,
             "config": tool.config or {},
         })
+        if tool.tool_type == "mqtt_subscribe" and tool.config.get("topic"):
+            mqtt_client.subscribe(tool.config["topic"])
 
     project_config = {
         "mcp_endpoint": project.mcp_endpoint,
