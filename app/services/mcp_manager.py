@@ -10,6 +10,7 @@ import httpx
 
 from app.services.log_service import log_service
 from app.services.mqtt_manager import mqtt_manager
+from app.services.json_path import parse_json_path, try_parse_json
 
 
 class MCPConnection:
@@ -33,6 +34,13 @@ class MCPConnection:
             if tool_type == "mqtt_publish":
                 cmd_values = [c["value"] for c in commands]
                 cmd_desc = ", ".join(f'{c["value"]}={c["label"]}' for c in commands)
+                payload_template = config.get("payload_template", "")
+
+                mcp_config = {
+                    "topic": config.get("topic", ""),
+                }
+                if payload_template:
+                    mcp_config["payloadTemplate"] = payload_template
 
                 mcp_tools.append({
                     "name": name,
@@ -48,13 +56,19 @@ class MCPConnection:
                         },
                         "required": ["command"],
                         "title": f"{name}Arguments",
-                        "mqttConfig": {
-                            "topic": config.get("topic", ""),
-                        }
+                        "mqttConfig": mcp_config
                     }
                 })
 
             elif tool_type == "mqtt_subscribe":
+                json_path = config.get("json_path", "")
+
+                sub_config = {
+                    "topic": config.get("topic", ""),
+                }
+                if json_path:
+                    sub_config["jsonPath"] = json_path
+
                 mcp_tools.append({
                     "name": name,
                     "description": description,
@@ -63,9 +77,7 @@ class MCPConnection:
                         "properties": {},
                         "required": [],
                         "title": f"{name}Arguments",
-                        "mqttSubscriberConfig": {
-                            "topic": config.get("topic", ""),
-                        }
+                        "mqttSubscriberConfig": sub_config
                     }
                 })
 
@@ -243,7 +255,12 @@ class MCPConnection:
 
         topic = config.get("topic", "")
         command = arguments.get("command", "")
-        payload = command
+        payload_template = config.get("payload_template", "")
+
+        if payload_template:
+            payload = payload_template.replace("{{command}}", command)
+        else:
+            payload = command
 
         await log_service.broadcast(
             self.project_id, "INFO",
@@ -271,11 +288,35 @@ class MCPConnection:
             }
 
         topic = config.get("topic", "")
+        json_path = config.get("json_path", "")
         message = mqtt_client.get_cached_message(topic)
 
         if message:
+            result_text = message
+
+            if json_path:
+                parsed = try_parse_json(message)
+                if parsed is not None:
+                    extracted = parse_json_path(parsed, json_path)
+                    if extracted is not None:
+                        if isinstance(extracted, (dict, list)):
+                            result_text = json.dumps(extracted, ensure_ascii=False)
+                        else:
+                            result_text = str(extracted)
+                        await log_service.broadcast(
+                            self.project_id, "INFO",
+                            f"JsonPath解析: {json_path} → {result_text}"
+                        )
+                    else:
+                        result_text = f"JsonPath {json_path} 未匹配到数据，原始消息: {message}"
+                else:
+                    await log_service.broadcast(
+                        self.project_id, "WARN",
+                        f"消息不是有效JSON，返回原始数据"
+                    )
+
             return {
-                "content": [{"type": "text", "text": message}],
+                "content": [{"type": "text", "text": result_text}],
                 "isError": False
             }
         else:

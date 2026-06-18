@@ -1128,6 +1128,11 @@
                             <div id="mqtt-pub-cmds"></div>
                             <div id="mqtt-pub-cmds-hint" class="cmd-hint">↑ 点击上方「添加命令」开始配置</div>
                         </div>
+                        <div class="form-group" style="margin-top:12px">
+                            <label class="form-label">JSON 消息模板 <span style="color:var(--text-tertiary)">(可选)</span></label>
+                            <input type="text" id="mqtt-pub-template" class="input" placeholder='例如: {"state":"{{command}}","device":"light"}'>
+                            <p class="form-hint">用 <code style="background:var(--surface);padding:1px 4px;border-radius:3px">{<!-- -->{command}}</code> 作为命令占位符。留空则直接发送命令文本。</p>
+                        </div>
                     </div>
 
                     <!-- MQTT Subscribe Config -->
@@ -1136,6 +1141,11 @@
                         <div class="form-group">
                             <label class="form-label">订阅主题 <span class="required">*</span></label>
                             <input type="text" id="mqtt-sub-topic" class="input" placeholder="例如: device/sensor/data">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">JsonPath 提取 <span style="color:var(--text-tertiary)">(可选)</span></label>
+                            <input type="text" id="mqtt-sub-jsonpath" class="input" placeholder="例如: $.data.temperature">
+                            <p class="form-hint">如果设备返回 JSON 数据，可用 JsonPath 提取特定字段。支持 <code style="background:var(--surface);padding:1px 4px;border-radius:3px">$.key.subkey</code> 和 <code style="background:var(--surface);padding:1px 4px;border-radius:3px">$.key[0]</code> 语法。留空返回原始消息。</p>
                         </div>
                         <div class="tool-config-info">
                             <span class="tool-config-info-icon">ℹ</span>
@@ -1535,6 +1545,8 @@
                         </div>
                         <div class="tool-card-actions">
                             <span class="tool-badge tool-badge-${color}">${typeLabels[t.tool_type]}</span>
+                            ${t.config?.payload_template ? '<span class="tool-badge tool-badge-amber" title="JSON消息模板">JSON↑</span>' : ''}
+                            ${t.config?.json_path ? `<span class="tool-badge tool-badge-emerald" title="JsonPath: ${escapeHtml(t.config.json_path)}">JSON↓</span>` : ''}
                             <button onclick="editTool(${t.id})" class="btn-icon" style="width:30px;height:30px;font-size:13px" title="编辑">&#9998;</button>
                             <button onclick="deleteTool(${t.id})" class="btn-icon" style="width:30px;height:30px;font-size:16px" title="删除">&times;</button>
                         </div>
@@ -1592,8 +1604,10 @@
             document.getElementById('tool-type').value = 'mqtt_publish';
             document.getElementById('tool-desc').value = '';
             document.getElementById('mqtt-pub-topic').value = '';
+            document.getElementById('mqtt-pub-template').value = '';
             document.getElementById('mqtt-pub-cmds').innerHTML = '';
             document.getElementById('mqtt-sub-topic').value = '';
+            document.getElementById('mqtt-sub-jsonpath').value = '';
             document.getElementById('http-method').value = 'GET';
             document.getElementById('http-url').value = '';
             document.getElementById('http-cmds').innerHTML = '';
@@ -1624,10 +1638,12 @@
                 const cfg = tool.config || {};
                 if (tool.tool_type === 'mqtt_publish') {
                     document.getElementById('mqtt-pub-topic').value = cfg.topic || '';
+                    document.getElementById('mqtt-pub-template').value = cfg.payload_template || '';
                     const cmds = (cfg.commands || []).map(c => ({ value: c.value, label: c.label }));
                     fillCmdRows('mqtt-pub-cmds', cmds);
                 } else if (tool.tool_type === 'mqtt_subscribe') {
                     document.getElementById('mqtt-sub-topic').value = cfg.topic || '';
+                    document.getElementById('mqtt-sub-jsonpath').value = cfg.json_path || '';
                 } else if (tool.tool_type === 'http_request') {
                     document.getElementById('http-method').value = cfg.method || 'GET';
                     document.getElementById('http-url').value = cfg.url || '';
@@ -1647,9 +1663,13 @@
             let config = {};
             if (type === 'mqtt_publish') {
                 const commands = collectCmds('mqtt-pub-cmds');
+                const payloadTemplate = document.getElementById('mqtt-pub-template').value.trim();
                 config = { topic: document.getElementById('mqtt-pub-topic').value, commands };
+                if (payloadTemplate) config.payload_template = payloadTemplate;
             } else if (type === 'mqtt_subscribe') {
+                const jsonPath = document.getElementById('mqtt-sub-jsonpath').value.trim();
                 config = { topic: document.getElementById('mqtt-sub-topic').value };
+                if (jsonPath) config.json_path = jsonPath;
             } else if (type === 'http_request') {
                 const commands = collectCmds('http-cmds');
                 config = { url: document.getElementById('http-url').value, method: document.getElementById('http-method').value, commands };
