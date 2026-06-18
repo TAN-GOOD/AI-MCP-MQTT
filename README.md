@@ -87,6 +87,58 @@ python init_db.py
 python run.py
 ```
 
+### 方式四：1Panel 面板部署
+
+如果你的服务器装了 [1Panel](https://1panel.cn)，可以通过面板的 Docker 编排功能部署。
+
+**第一步：SSH 登录服务器，克隆代码**
+
+```bash
+cd /opt
+git clone https://gitee.com/T510/ai-xiaozhi-mcp.git
+cd ai-xiaozhi-mcp
+```
+
+**第二步：修改配置（可选）**
+
+编辑 `docker-compose.yml`，修改数据库密码和 JWT 密钥：
+
+```yaml
+# MySQL 密码（两个地方要保持一致）
+MYSQL_ROOT_PASSWORD: 你的安全密码
+DATABASE_URL: mysql+pymysql://root:你的安全密码@db:3306/xiaozhi_mcp
+
+# JWT 密钥
+SECRET_KEY: 随便写一个复杂字符串
+```
+
+**第三步：在 1Panel 中创建编排**
+
+1. 登录 1Panel 面板
+2. 左侧菜单 → **容器** → **编排**
+3. 点击 **创建编排**
+4. 名称填 `xiaozhi-mcp`
+5. 选择 **从服务器路径加载**
+6. 路径填 `/opt/ai-xiaozhi-mcp/docker-compose.yml`
+7. 点击 **确认**
+
+**第四步：初始化数据库**
+
+在 1Panel 的 **终端** 或 SSH 中执行：
+
+```bash
+docker exec xiaozhi-app python init_db.py
+```
+
+**第五步：访问**
+
+打开浏览器访问 `http://你的服务器IP:8000`
+
+**后续更新代码：**
+
+1. SSH 登录服务器执行 `cd /opt/ai-xiaozhi-mcp && git pull`
+2. 在 1Panel **编排** 页面点击 `xiaozhi-mcp` 的 **重建** 按钮
+
 ---
 
 ## 📋 使用指南
