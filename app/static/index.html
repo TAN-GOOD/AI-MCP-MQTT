@@ -760,6 +760,7 @@
         .log-level-INFO { color: #60a5fa; }
         .log-level-WARN { color: var(--warning); }
         .log-level-ERROR { color: var(--error); }
+        .log-level-MQTT { color: #22d3ee; }
         .log-message {
             color: var(--text-secondary);
             word-break: break-all;
@@ -1744,7 +1745,7 @@
             const container = document.getElementById('log-content');
             const placeholder = container.querySelector('.log-placeholder');
             if (placeholder) placeholder.remove();
-            const levelColors = { DEBUG: 'log-level-DEBUG', INFO: 'log-level-INFO', WARN: 'log-level-WARN', ERROR: 'log-level-ERROR' };
+            const levelColors = { DEBUG: 'log-level-DEBUG', INFO: 'log-level-INFO', WARN: 'log-level-WARN', ERROR: 'log-level-ERROR', MQTT: 'log-level-MQTT' };
             const time = new Date(timestamp).toLocaleTimeString();
             const div = document.createElement('div');
             div.className = 'log-line';

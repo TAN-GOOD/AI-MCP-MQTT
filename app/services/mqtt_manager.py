@@ -92,8 +92,8 @@ class MQTTClientWrapper:
             loop = self._get_loop()
             asyncio.run_coroutine_threadsafe(
                 log_service.broadcast(
-                    self.project_id, "INFO",
-                    f"收到MQTT消息: 主题={message.topic}, 内容={payload[:200]}"
+                    self.project_id, "MQTT",
+                    f"← 收到 [{message.topic}]: {payload}"
                 ),
                 loop
             )
@@ -108,7 +108,7 @@ class MQTTClientWrapper:
         if reason_code == 0:
             loop = self._get_loop()
             asyncio.run_coroutine_threadsafe(
-                log_service.broadcast(self.project_id, "DEBUG", f"MQTT消息发布成功 (mid: {mid})"),
+                log_service.broadcast(self.project_id, "DEBUG", f"→ 发布确认 (mid: {mid})"),
                 loop
             )
 
