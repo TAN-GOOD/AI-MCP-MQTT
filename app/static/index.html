@@ -1,0 +1,1880 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>小智MCP-MQTT管理系统</title>
+    <style>
+        :root {
+            --bg: #ffffff;
+            --surface: #f8f9fa;
+            --elevated: #ffffff;
+            --border: #e2e5e9;
+            --text: #1a1a2e;
+            --text-secondary: #6b7280;
+            --text-tertiary: #9ca3af;
+            --accent: #6366f1;
+            --accent-hover: #4f46e5;
+            --success: #16a34a;
+            --error: #dc2626;
+            --warning: #d97706;
+            --radius: 6px;
+            --radius-lg: 8px;
+            --shadow: 0 1px 3px rgba(0,0,0,0.08);
+            --shadow-lg: 0 4px 12px rgba(0,0,0,0.1);
+        }
+
+        [data-theme="dark"] {
+            --bg: #0a0a0b;
+            --surface: #141415;
+            --elevated: #1c1c1e;
+            --border: #2a2a2e;
+            --text: #e5e5e5;
+            --text-secondary: #88888a;
+            --text-tertiary: #555557;
+            --accent: #6366f1;
+            --accent-hover: #818cf8;
+            --success: #22c55e;
+            --error: #ef4444;
+            --warning: #f59e0b;
+            --shadow: none;
+            --shadow-lg: 0 4px 24px rgba(0,0,0,0.5);
+        }
+
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            background: var(--bg);
+            color: var(--text);
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+            font-size: 14px;
+            line-height: 1.5;
+            min-height: 100vh;
+        }
+
+        .hidden { display: none !important; }
+
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: var(--bg); }
+        ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: var(--text-tertiary); }
+
+        .fade-in { animation: fadeIn 0.2s ease; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+
+        .line-clamp-2 {
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+        }
+
+        /* ===== AUTH PAGE ===== */
+        .auth-page {
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 24px;
+        }
+        .auth-form {
+            width: 100%;
+            max-width: 400px;
+        }
+        .auth-title {
+            font-size: 22px;
+            font-weight: 700;
+            color: var(--accent);
+            margin-bottom: 4px;
+            letter-spacing: -0.02em;
+        }
+        .auth-subtitle {
+            color: var(--text-secondary);
+            font-size: 14px;
+            margin-bottom: 36px;
+        }
+        .auth-tabs {
+            display: flex;
+            border-bottom: 1px solid var(--border);
+            margin-bottom: 28px;
+        }
+        .auth-tab {
+            flex: 1;
+            padding: 10px 16px;
+            font-size: 14px;
+            font-weight: 500;
+            font-family: inherit;
+            background: none;
+            border: none;
+            cursor: pointer;
+            transition: color 0.15s, border-color 0.15s;
+            border-bottom: 2px solid transparent;
+            margin-bottom: -1px;
+        }
+        .auth-tab-active {
+            color: var(--text);
+            border-bottom-color: var(--accent);
+        }
+        .auth-tab-inactive {
+            color: var(--text-tertiary);
+        }
+        .auth-tab-inactive:hover {
+            color: var(--text-secondary);
+        }
+        .error-message {
+            margin-top: 16px;
+            padding: 10px 14px;
+            background: rgba(239, 68, 68, 0.06);
+            border: 1px solid rgba(239, 68, 68, 0.2);
+            border-radius: var(--radius);
+            color: var(--error);
+            font-size: 13px;
+        }
+
+        /* ===== FORM ELEMENTS ===== */
+        .form-group { margin-bottom: 16px; }
+        .form-label {
+            display: block;
+            font-size: 13px;
+            font-weight: 500;
+            color: var(--text-secondary);
+            margin-bottom: 6px;
+        }
+        .form-label .required { color: var(--error); }
+        .input, .select, .textarea {
+            width: 100%;
+            padding: 9px 12px;
+            background: var(--elevated);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            color: var(--text);
+            font-size: 14px;
+            font-family: inherit;
+            line-height: 1.5;
+            transition: border-color 0.15s;
+        }
+        .input:focus, .select:focus, .textarea:focus {
+            outline: none;
+            border-color: var(--accent);
+        }
+        .input::placeholder, .textarea::placeholder { color: var(--text-tertiary); }
+        .select {
+            appearance: none;
+            cursor: pointer;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='%2388888a' viewBox='0 0 16 16'%3E%3Cpath d='M8 11L3 6h10l-5 5z'/%3E%3C/svg%3E");
+            background-repeat: no-repeat;
+            background-position: right 12px center;
+            padding-right: 32px;
+        }
+        .textarea { resize: none; }
+        .form-hint {
+            font-size: 12px;
+            color: var(--text-tertiary);
+            margin-top: 4px;
+        }
+        .form-grid-2 {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+        }
+        @media (max-width: 640px) {
+            .form-grid-2 { grid-template-columns: 1fr; }
+        }
+
+        /* ===== BUTTONS ===== */
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: 8px 18px;
+            font-size: 14px;
+            font-weight: 500;
+            font-family: inherit;
+            border-radius: var(--radius);
+            border: 1px solid transparent;
+            cursor: pointer;
+            transition: background 0.15s, border-color 0.15s, color 0.15s;
+            white-space: nowrap;
+            gap: 6px;
+            line-height: 1.5;
+        }
+        .btn-primary {
+            background: var(--accent);
+            color: #fff;
+            border-color: var(--accent);
+        }
+        .btn-primary:hover {
+            background: var(--accent-hover);
+            border-color: var(--accent-hover);
+        }
+        .btn-secondary {
+            background: transparent;
+            color: var(--text-secondary);
+            border-color: var(--border);
+        }
+        .btn-secondary:hover {
+            color: var(--text);
+            border-color: var(--text-tertiary);
+        }
+        .btn-danger {
+            background: transparent;
+            color: var(--error);
+            border-color: rgba(239, 68, 68, 0.25);
+        }
+        .btn-danger:hover {
+            background: rgba(239, 68, 68, 0.06);
+            border-color: rgba(239, 68, 68, 0.5);
+        }
+        .btn-success {
+            background: var(--success);
+            color: #fff;
+            border-color: var(--success);
+        }
+        .btn-success:hover { opacity: 0.9; }
+        .btn-warning {
+            background: var(--warning);
+            color: #fff;
+            border-color: var(--warning);
+        }
+        .btn-warning:hover { opacity: 0.9; }
+        .btn-sm { padding: 5px 12px; font-size: 13px; }
+        .btn-full { width: 100%; }
+        .btn-icon {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 36px;
+            height: 36px;
+            background: none;
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            color: var(--text-secondary);
+            cursor: pointer;
+            font-size: 16px;
+            font-family: inherit;
+            transition: color 0.15s, border-color 0.15s, background 0.15s;
+        }
+        .btn-icon:hover {
+            color: var(--text);
+            border-color: var(--text-tertiary);
+            background: var(--elevated);
+        }
+
+        /* ===== NAVIGATION ===== */
+        .nav {
+            background: var(--surface);
+            border-bottom: 1px solid var(--border);
+            position: sticky;
+            top: 0;
+            z-index: 50;
+        }
+        .nav-inner {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 24px;
+            height: 56px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        .nav-brand {
+            display: flex;
+            align-items: baseline;
+            gap: 12px;
+        }
+        .nav-logo {
+            font-size: 15px;
+            font-weight: 700;
+            color: var(--accent);
+            letter-spacing: -0.02em;
+        }
+        .nav-desc {
+            font-size: 12px;
+            color: var(--text-tertiary);
+        }
+        .nav-right {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+        .nav-user {
+            font-size: 13px;
+            color: var(--text-secondary);
+        }
+        .theme-toggle {
+            background: none;
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            color: var(--text-secondary);
+            cursor: pointer;
+            width: 36px;
+            height: 36px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px;
+            transition: all 0.15s;
+            flex-shrink: 0;
+        }
+        .theme-toggle:hover {
+            background: var(--elevated);
+            color: var(--text);
+            border-color: var(--accent);
+        }
+
+        /* ===== DASHBOARD ===== */
+        .dashboard-content {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 24px;
+        }
+        .section-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 24px;
+        }
+        .section-title {
+            font-size: 18px;
+            font-weight: 700;
+            color: var(--text);
+            letter-spacing: -0.01em;
+        }
+
+        /* ===== PROJECT CARDS ===== */
+        .projects-grid {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 12px;
+        }
+        @media (min-width: 768px) { .projects-grid { grid-template-columns: repeat(2, 1fr); } }
+        @media (min-width: 1024px) { .projects-grid { grid-template-columns: repeat(3, 1fr); } }
+        .project-card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-lg);
+            padding: 20px;
+            cursor: pointer;
+            transition: border-color 0.15s, box-shadow 0.15s;
+            box-shadow: var(--shadow);
+        }
+        .project-card:hover { border-color: var(--accent); box-shadow: var(--shadow-lg); }
+        .project-card-header {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            margin-bottom: 8px;
+            gap: 12px;
+        }
+        .project-card-title {
+            font-size: 15px;
+            font-weight: 600;
+            color: var(--text);
+            transition: color 0.15s;
+        }
+        .project-card:hover .project-card-title { color: var(--accent-hover); }
+        .project-card-desc {
+            font-size: 13px;
+            color: var(--text-secondary);
+            margin-bottom: 14px;
+            line-height: 1.5;
+        }
+        .project-card-meta {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            font-size: 12px;
+            color: var(--text-tertiary);
+        }
+        .empty-state {
+            text-align: center;
+            padding: 64px 24px;
+        }
+        .empty-state-bordered {
+            border: 1px solid var(--border);
+            border-radius: var(--radius-lg);
+        }
+        .empty-state-text {
+            color: var(--text-secondary);
+            margin-bottom: 20px;
+            font-size: 14px;
+        }
+
+        /* ===== STATUS ===== */
+        .status-indicator {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 12px;
+            flex-shrink: 0;
+        }
+        .status-dot {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: var(--text-tertiary);
+            flex-shrink: 0;
+        }
+        .status-dot-running { background: var(--success); }
+        .status-indicator-running { color: var(--success); }
+        .status-indicator-stopped { color: var(--text-tertiary); }
+        .status-badge {
+            display: inline-flex;
+            align-items: center;
+            padding: 2px 10px;
+            border-radius: 100px;
+            font-size: 12px;
+            font-weight: 500;
+            white-space: nowrap;
+        }
+        .status-running {
+            background: rgba(34, 197, 94, 0.08);
+            color: var(--success);
+            border: 1px solid rgba(34, 197, 94, 0.15);
+        }
+        .status-stopped {
+            background: rgba(85, 85, 87, 0.08);
+            color: var(--text-tertiary);
+            border: 1px solid rgba(85, 85, 87, 0.15);
+        }
+
+        /* ===== DETAIL HEADER ===== */
+        .detail-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 24px;
+            flex-wrap: wrap;
+            gap: 16px;
+        }
+        .detail-header-left {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+        }
+        .detail-info h2 {
+            font-size: 18px;
+            font-weight: 700;
+            color: var(--text);
+            letter-spacing: -0.01em;
+        }
+        .detail-info p {
+            font-size: 13px;
+            color: var(--text-secondary);
+        }
+        .detail-actions {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        /* ===== TABS ===== */
+        .detail-tabs {
+            display: flex;
+            border-bottom: 1px solid var(--border);
+            margin-bottom: 24px;
+        }
+        .detail-tab {
+            padding: 10px 20px;
+            font-size: 14px;
+            font-weight: 500;
+            font-family: inherit;
+            background: none;
+            border: none;
+            cursor: pointer;
+            transition: color 0.15s, border-color 0.15s;
+            border-bottom: 2px solid transparent;
+            margin-bottom: -1px;
+        }
+        .detail-tab:hover { color: var(--text-secondary); }
+        .detail-tab-active {
+            color: var(--text);
+            border-bottom-color: var(--accent);
+        }
+        .detail-tab-inactive {
+            color: var(--text-tertiary);
+            border-bottom-color: transparent;
+        }
+
+        /* ===== PANELS ===== */
+        .panel {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-lg);
+            padding: 24px;
+        }
+        .panel-title {
+            font-size: 15px;
+            font-weight: 600;
+            color: var(--text);
+            margin-bottom: 20px;
+        }
+        .panel-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 16px;
+        }
+        .config-grid {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 16px;
+        }
+        @media (min-width: 768px) {
+            .config-grid { grid-template-columns: repeat(2, 1fr); }
+            .config-full { grid-column: 1 / -1; }
+        }
+        .config-actions {
+            display: flex;
+            justify-content: flex-end;
+            margin-top: 24px;
+        }
+
+        /* ===== TOOL CARDS ===== */
+        .tools-list {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+        .tool-card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-lg);
+            padding: 14px 16px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 16px;
+        }
+        .tool-card-info {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            min-width: 0;
+        }
+        .tool-card-icon {
+            width: 36px;
+            height: 36px;
+            border-radius: var(--radius);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 15px;
+            font-weight: 700;
+            flex-shrink: 0;
+        }
+        .tool-card-icon.drag-handle {
+            cursor: grab;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+        .tool-card-icon.drag-handle:active { cursor: grabbing; }
+        .tool-card.dragging {
+            opacity: 0.5;
+            border: 2px dashed var(--accent) !important;
+        }
+        .tool-card.drag-over {
+            border-top: 2px solid var(--accent) !important;
+        }
+        .log-pause-btn {
+            padding: 2px 10px;
+            font-size: 12px;
+            font-weight: 500;
+            border-radius: var(--radius);
+            border: 1px solid var(--border);
+            background: var(--surface);
+            color: var(--text-secondary);
+            cursor: pointer;
+            transition: all 0.15s;
+        }
+        .log-pause-btn:hover { border-color: var(--accent); color: var(--text); }
+        .log-pause-btn.paused { background: var(--error); color: #fff; border-color: var(--error); }
+        .tool-icon-blue { background: rgba(99, 102, 241, 0.1); color: var(--accent-hover); }
+        .tool-icon-emerald { background: rgba(34, 197, 94, 0.1); color: #4ade80; }
+        .tool-icon-amber { background: rgba(245, 158, 11, 0.1); color: #fbbf24; }
+        .tool-card-name {
+            font-size: 14px;
+            font-weight: 500;
+            color: var(--text);
+        }
+        .tool-card-desc {
+            font-size: 12px;
+            color: var(--text-secondary);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            max-width: 300px;
+        }
+        .tool-card-actions {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            flex-shrink: 0;
+        }
+        .tool-badge {
+            padding: 2px 8px;
+            font-size: 11px;
+            font-weight: 500;
+            border-radius: var(--radius);
+            white-space: nowrap;
+        }
+        .tool-badge-blue { background: rgba(99, 102, 241, 0.1); color: var(--accent-hover); }
+        .tool-badge-emerald { background: rgba(34, 197, 94, 0.1); color: #4ade80; }
+        .tool-badge-amber { background: rgba(245, 158, 11, 0.1); color: #fbbf24; }
+
+        /* ===== TOOL CONFIG SECTIONS ===== */
+        .tool-config-section {
+            background: var(--bg);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 20px;
+        }
+        .tool-config-title {
+            font-size: 13px;
+            font-weight: 600;
+            margin-bottom: 16px;
+        }
+        .tool-config-title-accent { color: var(--accent-hover); }
+        .tool-config-title-success { color: #4ade80; }
+        .tool-config-title-warning { color: #fbbf24; }
+        .tool-config-info {
+            display: flex;
+            align-items: flex-start;
+            gap: 10px;
+            padding: 10px 12px;
+            background: rgba(34, 197, 94, 0.04);
+            border: 1px solid rgba(34, 197, 94, 0.12);
+            border-radius: var(--radius);
+            font-size: 12px;
+            color: rgba(74, 222, 128, 0.8);
+            line-height: 1.6;
+        }
+        .tool-config-info-icon {
+            color: #4ade80;
+            flex-shrink: 0;
+            line-height: 1.6;
+        }
+
+        /* ===== COMMAND ROWS ===== */
+        .cmd-row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 10px;
+            background: var(--bg);
+            border: 1px solid rgba(42, 42, 46, 0.6);
+            border-radius: var(--radius);
+        }
+        .cmd-indicator {
+            color: var(--text-tertiary);
+            font-size: 14px;
+            width: 20px;
+            text-align: center;
+            flex-shrink: 0;
+            font-weight: 600;
+        }
+        .cmd-input {
+            padding: 5px 10px;
+            background: var(--elevated);
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            color: var(--text);
+            font-size: 13px;
+            font-family: inherit;
+            line-height: 1.5;
+            transition: border-color 0.15s;
+        }
+        .cmd-input:focus { outline: none; border-color: var(--accent); }
+        .cmd-input::placeholder { color: var(--text-tertiary); }
+        .cmd-value {
+            width: 110px;
+            font-family: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', 'Consolas', monospace;
+            font-size: 12px;
+        }
+        .cmd-label { flex: 1; min-width: 0; }
+        .cmd-arrow {
+            color: var(--text-tertiary);
+            font-size: 13px;
+            flex-shrink: 0;
+        }
+        .cmd-remove {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 26px;
+            height: 26px;
+            background: none;
+            border: none;
+            border-radius: 4px;
+            color: var(--text-tertiary);
+            cursor: pointer;
+            font-size: 16px;
+            font-family: inherit;
+            transition: background 0.15s, color 0.15s;
+            flex-shrink: 0;
+        }
+        .cmd-remove:hover { background: rgba(239, 68, 68, 0.08); color: var(--error); }
+        .cmd-add {
+            font-size: 12px;
+            padding: 3px 10px;
+            background: rgba(99, 102, 241, 0.08);
+            color: var(--accent-hover);
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-family: inherit;
+            font-weight: 500;
+            transition: background 0.15s;
+        }
+        .cmd-add:hover { background: rgba(99, 102, 241, 0.15); }
+        .cmd-hint {
+            text-align: center;
+            padding: 20px;
+            color: var(--text-tertiary);
+            font-size: 13px;
+        }
+
+        /* ===== LOG VIEWER ===== */
+        .log-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 16px;
+        }
+        .ws-status {
+            display: flex;
+            align-items: center;
+            font-size: 13px;
+            gap: 8px;
+        }
+        .ws-connected { color: var(--success); }
+        .ws-disconnected { color: var(--text-secondary); }
+        .ws-error { color: var(--error); }
+        .ws-dot {
+            width: 7px;
+            height: 7px;
+            border-radius: 50%;
+            display: inline-block;
+            flex-shrink: 0;
+        }
+        .ws-dot-connected { background: var(--success); }
+        .ws-dot-disconnected { background: var(--text-tertiary); }
+        .ws-dot-error { background: var(--error); }
+        .log-container {
+            background: var(--bg);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-lg);
+            padding: 14px 16px;
+            height: 500px;
+            overflow-y: auto;
+            font-family: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', 'Consolas', monospace;
+            font-size: 12px;
+            line-height: 1.7;
+        }
+        .log-line { display: flex; }
+        .log-time {
+            color: var(--text-tertiary);
+            margin-right: 10px;
+            flex-shrink: 0;
+        }
+        .log-level {
+            margin-right: 10px;
+            flex-shrink: 0;
+            font-weight: 500;
+        }
+        .log-level-DEBUG { color: var(--text-tertiary); }
+        .log-level-INFO { color: #60a5fa; }
+        .log-level-WARN { color: var(--warning); }
+        .log-level-ERROR { color: var(--error); }
+        .log-level-MQTT { color: #22d3ee; }
+        .log-message {
+            color: var(--text-secondary);
+            word-break: break-all;
+        }
+        .log-placeholder {
+            color: var(--text-tertiary);
+            font-family: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', 'Consolas', monospace;
+            font-size: 12px;
+        }
+
+        /* ===== MODALS ===== */
+        .modal-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.55);
+            z-index: 50;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 24px;
+        }
+        .modal-panel {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-lg);
+            padding: 24px;
+            width: 100%;
+            max-height: 90vh;
+            overflow-y: auto;
+        }
+        .modal-panel-sm { max-width: 440px; }
+        .modal-panel-md { max-width: 520px; }
+        .modal-panel-lg { max-width: 640px; }
+        .modal-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 24px;
+        }
+        .modal-title {
+            font-size: 16px;
+            font-weight: 700;
+            color: var(--text);
+        }
+        .modal-close {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 32px;
+            height: 32px;
+            background: none;
+            border: 1px solid transparent;
+            border-radius: var(--radius);
+            color: var(--text-secondary);
+            cursor: pointer;
+            font-size: 20px;
+            font-family: inherit;
+            transition: color 0.15s, background 0.15s;
+        }
+        .modal-close:hover {
+            background: var(--elevated);
+            color: var(--text);
+        }
+        .modal-actions {
+            display: flex;
+            justify-content: flex-end;
+            gap: 10px;
+            padding-top: 20px;
+        }
+
+        /* ===== TOAST ===== */
+        .toast-wrapper {
+            position: fixed;
+            top: 16px;
+            right: 16px;
+            z-index: 100;
+        }
+        .toast {
+            padding: 11px 18px;
+            border-radius: var(--radius);
+            font-size: 13px;
+            font-weight: 500;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-left: 3px solid var(--accent);
+            color: var(--text);
+            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
+        }
+        .toast-success { border-left-color: var(--success); }
+        .toast-error { border-left-color: var(--error); }
+        .toast-info { border-left-color: var(--accent); }
+        .toast-warn { border-left-color: var(--warning); }
+    </style>
+</head>
+<body>
+    <div id="app">
+        <!-- Auth Page -->
+        <div id="auth-page" class="auth-page">
+            <div class="auth-form fade-in">
+                <h1 class="auth-title">XiaoZhi MCP</h1>
+                <p class="auth-subtitle">通过MCP协议控制物联网设备</p>
+
+                <div class="auth-tabs">
+                    <button onclick="switchAuthTab('login')" id="login-tab" class="auth-tab auth-tab-active">登录</button>
+                    <button onclick="switchAuthTab('register')" id="register-tab" class="auth-tab auth-tab-inactive">注册</button>
+                </div>
+
+                <form id="login-form" onsubmit="handleLogin(event)">
+                    <div class="form-group">
+                        <label class="form-label">用户名</label>
+                        <input type="text" id="login-username" required class="input" placeholder="请输入用户名">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">密码</label>
+                        <input type="password" id="login-password" required class="input" placeholder="请输入密码">
+                    </div>
+                    <button type="submit" class="btn btn-primary btn-full">登录</button>
+                </form>
+
+                <form id="register-form" class="hidden" onsubmit="handleRegister(event)">
+                    <div class="form-group">
+                        <label class="form-label">用户名</label>
+                        <input type="text" id="reg-username" required minlength="3" maxlength="50" class="input" placeholder="3-50个字符">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">邮箱</label>
+                        <input type="email" id="reg-email" required class="input" placeholder="请输入邮箱">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">密码</label>
+                        <input type="password" id="reg-password" required minlength="6" class="input" placeholder="至少6个字符">
+                    </div>
+                    <div class="form-group">
+                        <label class="label">验证码</label>
+                        <div style="display:flex;gap:8px;align-items:center">
+                            <input type="text" id="reg-captcha" required maxlength="4" class="input" placeholder="输入验证码" style="flex:1;text-transform:uppercase">
+                            <div id="captcha-image" style="cursor:pointer;height:40px;shrink:0" title="点击刷新"></div>
+                        </div>
+                    </div>
+                    <input type="hidden" id="reg-captcha-id">
+                    <button type="submit" class="btn btn-primary btn-full">注册</button>
+                </form>
+
+                <div id="auth-error" class="hidden error-message"></div>
+            </div>
+        </div>
+
+        <!-- Dashboard -->
+        <div id="dashboard-page" class="hidden">
+            <nav class="nav">
+                <div class="nav-inner">
+                    <div class="nav-brand">
+                        <span class="nav-logo">XiaoZhi MCP</span>
+                        <span class="nav-desc">物联网设备管理系统</span>
+                    </div>
+                    <div class="nav-right">
+                        <button class="theme-toggle" onclick="toggleTheme()" title="切换主题" id="theme-btn">☀️</button>
+                        <span id="user-display" class="nav-user"></span>
+                        <button onclick="logout()" class="btn btn-secondary btn-sm">退出</button>
+                    </div>
+                </div>
+            </nav>
+
+            <div class="dashboard-content">
+                <!-- Projects View -->
+                <div id="projects-view">
+                    <div class="section-header">
+                        <h2 class="section-title">我的项目</h2>
+                        <button onclick="showCreateProject()" class="btn btn-primary">新建项目</button>
+                    </div>
+                    <div id="projects-list" class="projects-grid"></div>
+                    <div id="no-projects" class="hidden empty-state">
+                        <p class="empty-state-text">还没有项目，创建一个开始吧</p>
+                        <button onclick="showCreateProject()" class="btn btn-primary">创建第一个项目</button>
+                    </div>
+                </div>
+
+                <!-- Project Detail -->
+                <div id="project-detail" class="hidden fade-in">
+                    <div class="detail-header">
+                        <div class="detail-header-left">
+                            <button onclick="backToProjects()" class="btn-icon" title="返回">&#8592;</button>
+                            <div class="detail-info">
+                                <h2 id="detail-project-name"></h2>
+                                <p id="detail-project-desc"></p>
+                            </div>
+                            <span id="detail-status-badge" class="status-badge"></span>
+                        </div>
+                        <div class="detail-actions">
+                            <button id="btn-start" onclick="startProject()" class="btn btn-success btn-sm hidden">启动</button>
+                            <button id="btn-stop" onclick="stopProject()" class="btn btn-danger btn-sm hidden">停止</button>
+                            <button id="btn-restart" onclick="restartProject()" class="btn btn-warning btn-sm hidden">重启</button>
+                            <button onclick="deleteCurrentProject()" class="btn btn-danger btn-sm">删除</button>
+                        </div>
+                    </div>
+
+                    <!-- Tabs -->
+                    <div class="detail-tabs">
+                        <button onclick="switchDetailTab('config')" id="tab-config" class="detail-tab detail-tab-active">项目配置</button>
+                        <button onclick="switchDetailTab('tools')" id="tab-tools" class="detail-tab detail-tab-inactive">工具管理</button>
+                        <button onclick="switchDetailTab('logs')" id="tab-logs" class="detail-tab detail-tab-inactive">实时日志</button>
+                    </div>
+
+                    <!-- Config Panel -->
+                    <div id="panel-config" class="panel">
+                        <h3 class="panel-title">MCP &amp; MQTT 配置</h3>
+                        <form onsubmit="saveProjectConfig(event)">
+                            <div class="config-grid">
+                                <div class="form-group config-full">
+                                    <label class="form-label">MCP接入点地址 <span class="required">*</span></label>
+                                    <input type="text" id="cfg-mcp-endpoint" required class="input" placeholder="wss://xxx.xiaozhi.me/...">
+                                    <p class="form-hint">从 xiaozhi.me 控制台获取智能体的MCP接入点</p>
+                                </div>
+                                <div class="form-group">
+                                    <label class="form-label">MQTT服务器地址 <span class="required">*</span></label>
+                                    <input type="text" id="cfg-mqtt-broker" required class="input" placeholder="broker.emqx.io">
+                                </div>
+                                <div class="form-group">
+                                    <label class="form-label">MQTT端口</label>
+                                    <input type="number" id="cfg-mqtt-port" value="1883" class="input">
+                                </div>
+                                <div class="form-group">
+                                    <label class="form-label">MQTT用户名</label>
+                                    <input type="text" id="cfg-mqtt-username" class="input" placeholder="可选">
+                                </div>
+                                <div class="form-group">
+                                    <label class="form-label">MQTT密码</label>
+                                    <input type="password" id="cfg-mqtt-password" class="input" placeholder="可选">
+                                </div>
+                            </div>
+                            <div class="config-actions">
+                                <button type="submit" class="btn btn-primary">保存配置</button>
+                            </div>
+                        </form>
+                    </div>
+
+                    <!-- Tools Panel -->
+                    <div id="panel-tools" class="hidden">
+                        <div class="panel-header">
+                            <h3 class="panel-title" style="margin-bottom:0">工具列表</h3>
+                            <button onclick="showAddTool()" class="btn btn-primary btn-sm">添加工具</button>
+                        </div>
+                        <div id="tools-list" class="tools-list"></div>
+                        <div id="no-tools" class="hidden empty-state empty-state-bordered">还没有工具，添加一个吧</div>
+                    </div>
+
+                    <!-- Logs Panel -->
+                    <div id="panel-logs" class="hidden">
+                        <div class="log-header">
+                            <h3 class="panel-title" style="margin-bottom:0">实时日志</h3>
+                            <div style="display:flex;align-items:center;gap:12px">
+                                <span id="ws-status" class="ws-status ws-disconnected">
+                                    <span class="ws-dot ws-dot-disconnected"></span>未连接
+                                </span>
+                                <button onclick="clearLogs()" class="btn btn-secondary btn-sm">清空</button>
+                                <button onclick="toggleLogPause()" id="log-pause-btn" class="log-pause-btn">⏸ 暂停</button>
+                            </div>
+                        </div>
+                        <div id="log-container" class="log-container">
+                            <div id="log-content">
+                                <p class="log-placeholder">等待日志输出...</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Project Modal -->
+        <div id="project-modal" class="hidden modal-overlay">
+            <div class="modal-panel modal-panel-md fade-in">
+                <div class="modal-header">
+                    <h3 id="modal-title" class="modal-title">新建项目</h3>
+                    <button onclick="closeModal('project-modal')" class="modal-close">&times;</button>
+                </div>
+                <form onsubmit="saveProject(event)">
+                    <input type="hidden" id="modal-project-id">
+                    <div class="form-group">
+                        <label class="form-label">项目名称 <span class="required">*</span></label>
+                        <input type="text" id="modal-name" required class="input" placeholder="我的IoT项目">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">项目描述</label>
+                        <textarea id="modal-desc" rows="2" class="input textarea" placeholder="可选描述"></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">MCP接入点 <span class="required">*</span></label>
+                        <input type="text" id="modal-mcp" required class="input" placeholder="wss://...">
+                    </div>
+                    <div class="form-grid-2">
+                        <div class="form-group">
+                            <label class="form-label">MQTT服务器 <span class="required">*</span></label>
+                            <input type="text" id="modal-mqtt-broker" required class="input" placeholder="broker.emqx.io">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">端口</label>
+                            <input type="number" id="modal-mqtt-port" value="1883" class="input">
+                        </div>
+                    </div>
+                    <div class="form-grid-2">
+                        <div class="form-group">
+                            <label class="form-label">MQTT用户名</label>
+                            <input type="text" id="modal-mqtt-user" class="input" placeholder="可选">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">MQTT密码</label>
+                            <input type="password" id="modal-mqtt-pass" class="input" placeholder="可选">
+                        </div>
+                    </div>
+                    <div class="modal-actions">
+                        <button type="button" onclick="closeModal('project-modal')" class="btn btn-secondary">取消</button>
+                        <button type="submit" class="btn btn-primary">保存</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Tool Modal -->
+        <div id="tool-modal" class="hidden modal-overlay">
+            <div class="modal-panel modal-panel-lg fade-in">
+                <div class="modal-header">
+                    <h3 id="tool-modal-title" class="modal-title">添加工具</h3>
+                    <button onclick="closeModal('tool-modal')" class="modal-close">&times;</button>
+                </div>
+                <form onsubmit="saveTool(event)">
+                    <input type="hidden" id="tool-modal-id">
+                    <div class="form-grid-2">
+                        <div class="form-group">
+                            <label class="form-label">工具名称 <span class="required">*</span></label>
+                            <input type="text" id="tool-name" required class="input" placeholder="control_light">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">工具类型 <span class="required">*</span></label>
+                            <select id="tool-type" required onchange="updateToolConfigUI()" class="input select">
+                                <option value="mqtt_publish">发送MQTT消息</option>
+                                <option value="mqtt_subscribe">读取MQTT消息</option>
+                                <option value="http_request">调用HTTP接口</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">工具描述</label>
+                        <input type="text" id="tool-desc" class="input" placeholder="描述这个工具的功能，AI会根据描述决定何时调用">
+                    </div>
+
+                    <!-- MQTT Publish Config -->
+                    <div id="config-mqtt-publish" class="tool-config tool-config-section">
+                        <h4 class="tool-config-title tool-config-title-accent">MQTT发送命令</h4>
+                        <div class="form-group">
+                            <label class="form-label">发布主题 <span class="required">*</span></label>
+                            <input type="text" id="mqtt-pub-topic" class="input" placeholder="例如: device/light/control">
+                        </div>
+                        <div>
+                            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+                                <label class="form-label" style="margin-bottom:0">命令选项</label>
+                                <button type="button" onclick="addCmdRow('mqtt-pub-cmds')" class="cmd-add">+ 添加命令</button>
+                            </div>
+                            <p class="form-hint" style="margin-bottom:10px">添加设备支持的命令，AI会根据用户语音自动选择发送</p>
+                            <div id="mqtt-pub-cmds"></div>
+                            <div id="mqtt-pub-cmds-hint" class="cmd-hint">↑ 点击上方「添加命令」开始配置</div>
+                        </div>
+                        <div class="form-group" style="margin-top:12px">
+                            <label class="form-label">JSON 消息模板 <span style="color:var(--text-tertiary)">(可选)</span></label>
+                            <input type="text" id="mqtt-pub-template" class="input" placeholder='例如: {"state":"{{command}}","device":"light"}'>
+                            <p class="form-hint">用 <code style="background:var(--surface);padding:1px 4px;border-radius:3px">{<!-- -->{command}}</code> 作为命令占位符。留空则直接发送命令文本。</p>
+                        </div>
+                    </div>
+
+                    <!-- MQTT Subscribe Config -->
+                    <div id="config-mqtt-subscribe" class="tool-config hidden tool-config-section">
+                        <h4 class="tool-config-title tool-config-title-success">MQTT读取数据</h4>
+                        <div class="form-group">
+                            <label class="form-label">订阅主题 <span class="required">*</span></label>
+                            <input type="text" id="mqtt-sub-topic" class="input" placeholder="例如: device/sensor/data">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">JsonPath 提取 <span style="color:var(--text-tertiary)">(可选)</span></label>
+                            <input type="text" id="mqtt-sub-jsonpath" class="input" placeholder="例如: $.data.temperature">
+                            <p class="form-hint">如果设备返回 JSON 数据，可用 JsonPath 提取特定字段。支持 <code style="background:var(--surface);padding:1px 4px;border-radius:3px">$.key.subkey</code> 和 <code style="background:var(--surface);padding:1px 4px;border-radius:3px">$.key[0]</code> 语法。留空返回原始消息。</p>
+                        </div>
+                        <div class="tool-config-info">
+                            <span class="tool-config-info-icon">ℹ</span>
+                            <p>系统会自动订阅该主题并缓存最新消息。当用户对小智说"查看温度"时，AI会调用此工具获取最新数据。</p>
+                        </div>
+                    </div>
+
+                    <!-- HTTP Request Config -->
+                    <div id="config-http-request" class="tool-config hidden tool-config-section">
+                        <h4 class="tool-config-title tool-config-title-warning">HTTP调用接口</h4>
+                        <div class="form-grid-2">
+                            <div class="form-group">
+                                <label class="form-label">方法</label>
+                                <select id="http-method" class="input select">
+                                    <option value="GET">GET</option>
+                                    <option value="POST">POST</option>
+                                    <option value="PUT">PUT</option>
+                                    <option value="DELETE">DELETE</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">接口地址 <span class="required">*</span></label>
+                                <input type="text" id="http-url" class="input" placeholder="https://api.example.com/control">
+                            </div>
+                        </div>
+                        <div>
+                            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+                                <label class="form-label" style="margin-bottom:0">命令选项</label>
+                                <button type="button" onclick="addCmdRow('http-cmds')" class="cmd-add">+ 添加命令</button>
+                            </div>
+                            <p class="form-hint" style="margin-bottom:10px">添加接口支持的命令，AI会根据用户语音自动选择发送</p>
+                            <div id="http-cmds"></div>
+                            <div id="http-cmds-hint" class="cmd-hint">↑ 点击上方「添加命令」开始配置</div>
+                        </div>
+                    </div>
+
+                    <div class="modal-actions">
+                        <button type="button" onclick="closeModal('tool-modal')" class="btn btn-secondary">取消</button>
+                        <button type="submit" class="btn btn-primary">保存</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Toast -->
+        <div id="toast" class="hidden toast-wrapper fade-in">
+            <div id="toast-content" class="toast"></div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = '';
+        let token = localStorage.getItem('token');
+        let currentUser = null;
+        let currentProject = null;
+        let logWs = null;
+
+        function api(path, options = {}) {
+            const headers = { 'Content-Type': 'application/json', ...options.headers };
+            if (token) headers['Authorization'] = `Bearer ${token}`;
+            return fetch(`${API_BASE}${path}`, { ...options, headers }).then(async r => {
+                const data = await r.json();
+                if (r.status === 401) {
+                    if (path === '/api/auth/login' || path === '/api/auth/register') {
+                        throw new Error(data.detail || '用户名或密码错误');
+                    }
+                    logout();
+                    throw new Error(data.detail || '认证已过期，请重新登录');
+                }
+                if (!r.ok) throw new Error(data.detail || data.message || '请求失败');
+                return data;
+            });
+        }
+
+        function showToast(message, type = 'success') {
+            const toast = document.getElementById('toast');
+            const content = document.getElementById('toast-content');
+            const colors = { success: 'toast toast-success', error: 'toast toast-error', info: 'toast toast-info', warn: 'toast toast-warn' };
+            content.className = `${colors[type] || colors.info}`;
+            content.textContent = message;
+            toast.classList.remove('hidden');
+            setTimeout(() => toast.classList.add('hidden'), 3000);
+        }
+
+        function switchAuthTab(tab) {
+            document.getElementById('login-form').classList.toggle('hidden', tab !== 'login');
+            document.getElementById('register-form').classList.toggle('hidden', tab !== 'register');
+            document.getElementById('login-tab').className = tab === 'login' ? 'auth-tab auth-tab-active' : 'auth-tab auth-tab-inactive';
+            document.getElementById('register-tab').className = tab === 'register' ? 'auth-tab auth-tab-active' : 'auth-tab auth-tab-inactive';
+            document.getElementById('auth-error').classList.add('hidden');
+            if (tab === 'register') loadCaptcha();
+        }
+
+        async function handleLogin(e) {
+            e.preventDefault();
+            try {
+                const data = await api('/api/auth/login', {
+                    method: 'POST',
+                    body: JSON.stringify({ username: document.getElementById('login-username').value, password: document.getElementById('login-password').value })
+                });
+                token = data.access_token;
+                localStorage.setItem('token', token);
+                await loadDashboard();
+            } catch (err) {
+                showAuthError(err.message);
+            }
+        }
+
+        async function handleRegister(e) {
+            e.preventDefault();
+            try {
+                await api('/api/auth/register', {
+                    method: 'POST',
+                    body: JSON.stringify({
+                        username: document.getElementById('reg-username').value,
+                        email: document.getElementById('reg-email').value,
+                        password: document.getElementById('reg-password').value,
+                        captcha_id: document.getElementById('reg-captcha-id').value,
+                        captcha_code: document.getElementById('reg-captcha').value
+                    })
+                });
+                showToast('注册成功，请登录', 'success');
+                switchAuthTab('login');
+                document.getElementById('login-username').value = document.getElementById('reg-username').value;
+            } catch (err) {
+                showAuthError(err.message);
+                loadCaptcha();
+            }
+        }
+
+        function showAuthError(msg) {
+            const el = document.getElementById('auth-error');
+            el.textContent = msg;
+            el.classList.remove('hidden');
+        }
+
+        function toggleTheme() {
+            const html = document.documentElement;
+            const current = html.getAttribute('data-theme');
+            const next = current === 'dark' ? 'light' : 'dark';
+            html.setAttribute('data-theme', next);
+            localStorage.setItem('theme', next);
+            document.getElementById('theme-btn').textContent = next === 'dark' ? '🌙' : '☀️';
+        }
+
+        (function initTheme() {
+            const saved = localStorage.getItem('theme');
+            const theme = saved || 'light';
+            document.documentElement.setAttribute('data-theme', theme);
+            document.addEventListener('DOMContentLoaded', () => {
+                const btn = document.getElementById('theme-btn');
+                if (btn) btn.textContent = theme === 'dark' ? '🌙' : '☀️';
+            });
+        })();
+
+        async function loadCaptcha() {
+            try {
+                const data = await api('/api/auth/captcha');
+                document.getElementById('reg-captcha-id').value = data.captcha_id;
+                document.getElementById('captcha-image').innerHTML = data.image;
+            } catch {}
+        }
+
+        function logout() {
+            token = null;
+            currentUser = null;
+            localStorage.removeItem('token');
+            if (logWs) { logWs.close(); logWs = null; }
+            document.getElementById('auth-page').classList.remove('hidden');
+            document.getElementById('dashboard-page').classList.add('hidden');
+        }
+
+        async function loadDashboard() {
+            try {
+                currentUser = await api('/api/auth/me');
+                document.getElementById('user-display').textContent = `欢迎, ${currentUser.username}`;
+                document.getElementById('auth-page').classList.add('hidden');
+                document.getElementById('dashboard-page').classList.remove('hidden');
+                await loadProjects();
+            } catch (err) {
+                logout();
+            }
+        }
+
+        async function loadProjects() {
+            try {
+                const projects = await api('/api/projects');
+                const list = document.getElementById('projects-list');
+                const noProjects = document.getElementById('no-projects');
+                if (projects.length === 0) {
+                    list.innerHTML = '';
+                    noProjects.classList.remove('hidden');
+                    return;
+                }
+                noProjects.classList.add('hidden');
+                list.innerHTML = projects.map(p => `
+                    <div class="project-card" onclick="openProject(${p.id})">
+                        <div class="project-card-header">
+                            <h3 class="project-card-title">${escapeHtml(p.name)}</h3>
+                            <span class="status-indicator ${p.is_running ? 'status-indicator-running' : 'status-indicator-stopped'}">
+                                <span class="status-dot ${p.is_running ? 'status-dot-running' : ''}"></span>
+                                ${p.is_running ? '运行中' : '已停止'}
+                            </span>
+                        </div>
+                        <p class="project-card-desc line-clamp-2">${escapeHtml(p.description || '暂无描述')}</p>
+                        <div class="project-card-meta">
+                            <span>${p.tools.length} 个工具</span>
+                            <span>${new Date(p.created_at).toLocaleDateString()}</span>
+                        </div>
+                    </div>
+                `).join('');
+            } catch (err) {
+                showToast('加载项目失败: ' + err.message, 'error');
+            }
+        }
+
+        function showCreateProject() {
+            document.getElementById('modal-title').textContent = '新建项目';
+            document.getElementById('modal-project-id').value = '';
+            document.getElementById('modal-name').value = '';
+            document.getElementById('modal-desc').value = '';
+            document.getElementById('modal-mcp').value = '';
+            document.getElementById('modal-mqtt-broker').value = '';
+            document.getElementById('modal-mqtt-port').value = '1883';
+            document.getElementById('modal-mqtt-user').value = '';
+            document.getElementById('modal-mqtt-pass').value = '';
+            document.getElementById('project-modal').classList.remove('hidden');
+        }
+
+        async function saveProject(e) {
+            e.preventDefault();
+            const id = document.getElementById('modal-project-id').value;
+            const body = {
+                name: document.getElementById('modal-name').value,
+                description: document.getElementById('modal-desc').value || null,
+                mcp_endpoint: document.getElementById('modal-mcp').value,
+                mqtt_broker: document.getElementById('modal-mqtt-broker').value,
+                mqtt_port: parseInt(document.getElementById('modal-mqtt-port').value) || 1883,
+                mqtt_username: document.getElementById('modal-mqtt-user').value || null,
+                mqtt_password: document.getElementById('modal-mqtt-pass').value || null,
+            };
+            try {
+                if (id) {
+                    await api(`/api/projects/${id}`, { method: 'PUT', body: JSON.stringify(body) });
+                    showToast('项目已更新');
+                } else {
+                    await api('/api/projects', { method: 'POST', body: JSON.stringify(body) });
+                    showToast('项目已创建');
+                }
+                closeModal('project-modal');
+                if (currentProject) {
+                    await openProject(currentProject.id);
+                } else {
+                    await loadProjects();
+                }
+            } catch (err) {
+                showToast(err.message, 'error');
+            }
+        }
+
+        async function openProject(id) {
+            try {
+                currentProject = await api(`/api/projects/${id}`);
+                document.getElementById('projects-view').classList.add('hidden');
+                document.getElementById('project-detail').classList.remove('hidden');
+                document.getElementById('detail-project-name').textContent = currentProject.name;
+                document.getElementById('detail-project-desc').textContent = currentProject.description || '暂无描述';
+                updateStatusBadge();
+                document.getElementById('cfg-mcp-endpoint').value = currentProject.mcp_endpoint;
+                document.getElementById('cfg-mqtt-broker').value = currentProject.mqtt_broker;
+                document.getElementById('cfg-mqtt-port').value = currentProject.mqtt_port;
+                document.getElementById('cfg-mqtt-username').value = currentProject.mqtt_username || '';
+                document.getElementById('cfg-mqtt-password').value = '';
+                await loadTools();
+                connectLogWebSocket(id);
+            } catch (err) {
+                showToast('加载项目失败: ' + err.message, 'error');
+            }
+        }
+
+        function updateStatusBadge() {
+            const badge = document.getElementById('detail-status-badge');
+            const isRunning = currentProject.is_running;
+            badge.className = `status-badge ${isRunning ? 'status-running' : 'status-stopped'}`;
+            badge.textContent = isRunning ? '运行中' : '已停止';
+            document.getElementById('btn-start').classList.toggle('hidden', isRunning);
+            document.getElementById('btn-stop').classList.toggle('hidden', !isRunning);
+            document.getElementById('btn-restart').classList.toggle('hidden', !isRunning);
+        }
+
+        function backToProjects() {
+            if (logWs) { logWs.close(); logWs = null; }
+            currentProject = null;
+            document.getElementById('project-detail').classList.add('hidden');
+            document.getElementById('projects-view').classList.remove('hidden');
+            loadProjects();
+        }
+
+        function switchDetailTab(tab) {
+            ['config', 'tools', 'logs'].forEach(t => {
+                document.getElementById(`tab-${t}`).className = t === tab ? 'detail-tab detail-tab-active' : 'detail-tab detail-tab-inactive';
+                document.getElementById(`panel-${t}`).classList.toggle('hidden', t !== tab);
+            });
+        }
+
+        async function saveProjectConfig(e) {
+            e.preventDefault();
+            try {
+                const body = {
+                    mcp_endpoint: document.getElementById('cfg-mcp-endpoint').value,
+                    mqtt_broker: document.getElementById('cfg-mqtt-broker').value,
+                    mqtt_port: parseInt(document.getElementById('cfg-mqtt-port').value) || 1883,
+                    mqtt_username: document.getElementById('cfg-mqtt-username').value || null,
+                };
+                const pwd = document.getElementById('cfg-mqtt-password').value;
+                if (pwd) body.mqtt_password = pwd;
+                currentProject = await api(`/api/projects/${currentProject.id}`, { method: 'PUT', body: JSON.stringify(body) });
+                showToast('配置已保存');
+            } catch (err) {
+                showToast(err.message, 'error');
+            }
+        }
+
+        async function startProject() {
+            try {
+                const data = await api(`/api/projects/${currentProject.id}/start`, { method: 'POST' });
+                currentProject.is_running = true;
+                updateStatusBadge();
+                showToast('项目已启动');
+            } catch (err) {
+                showToast(err.message, 'error');
+            }
+        }
+
+        async function stopProject() {
+            try {
+                await api(`/api/projects/${currentProject.id}/stop`, { method: 'POST' });
+                currentProject.is_running = false;
+                updateStatusBadge();
+                showToast('项目已停止');
+            } catch (err) {
+                showToast(err.message, 'error');
+            }
+        }
+
+        async function restartProject() {
+            try {
+                await api(`/api/projects/${currentProject.id}/restart`, { method: 'POST' });
+                currentProject.is_running = true;
+                updateStatusBadge();
+                showToast('项目已重启');
+            } catch (err) {
+                showToast(err.message, 'error');
+            }
+        }
+
+        async function deleteCurrentProject() {
+            if (!confirm('确定要删除此项目吗？此操作不可恢复。')) return;
+            try {
+                await api(`/api/projects/${currentProject.id}`, { method: 'DELETE' });
+                showToast('项目已删除');
+                backToProjects();
+            } catch (err) {
+                showToast(err.message, 'error');
+            }
+        }
+
+        async function loadTools() {
+            try {
+                const tools = await api(`/api/projects/${currentProject.id}/tools`);
+                const list = document.getElementById('tools-list');
+                const noTools = document.getElementById('no-tools');
+                if (tools.length === 0) {
+                    list.innerHTML = '';
+                    noTools.classList.remove('hidden');
+                    return;
+                }
+                noTools.classList.add('hidden');
+                const typeLabels = { mqtt_publish: 'MQTT发布', mqtt_subscribe: 'MQTT订阅', http_request: 'HTTP接口' };
+                const typeColors = { mqtt_publish: 'blue', mqtt_subscribe: 'emerald', http_request: 'amber' };
+                const typeIcons = { mqtt_publish: '\u2191', mqtt_subscribe: '\u2193', http_request: '\u2197' };
+                list.innerHTML = tools.map(t => {
+                    const color = typeColors[t.tool_type] || 'blue';
+                    const icon = typeIcons[t.tool_type] || '\u2022';
+                    return `
+                    <div class="tool-card" draggable="true" data-tool-id="${t.id}" ondragstart="onToolDragStart(event)" ondragover="onToolDragOver(event)" ondragleave="onToolDragLeave(event)" ondrop="onToolDrop(event)" ondragend="onToolDragEnd(event)">
+                        <div class="tool-card-info">
+                            <div class="tool-card-icon tool-icon-${color}">${icon}</div>
+                            <div>
+                                <div class="tool-card-name">${escapeHtml(t.name)}</div>
+                                <div class="tool-card-desc">${escapeHtml(t.description || typeLabels[t.tool_type])}</div>
+                            </div>
+                        </div>
+                        <div class="tool-card-actions">
+                            <span class="tool-badge tool-badge-${color}">${typeLabels[t.tool_type]}</span>
+                            ${t.config?.payload_template ? '<span class="tool-badge tool-badge-amber" title="JSON消息模板">JSON↑</span>' : ''}
+                            ${t.config?.json_path ? `<span class="tool-badge tool-badge-emerald" title="JsonPath: ${escapeHtml(t.config.json_path)}">JSON↓</span>` : ''}
+                            <div class="drag-handle" title="长按拖动排序" style="cursor:grab;padding:4px 2px;font-size:14px;color:var(--text-tertiary)">☰</div>
+                            <button onclick="editTool(${t.id})" class="btn-icon" style="width:30px;height:30px;font-size:13px" title="编辑">&#9998;</button>
+                            <button onclick="deleteTool(${t.id})" class="btn-icon" style="width:30px;height:30px;font-size:16px" title="删除">&times;</button>
+                        </div>
+                    </div>`;
+                }).join('');
+            } catch (err) {
+                showToast('加载工具失败: ' + err.message, 'error');
+            }
+        }
+
+        function addCmdRow(containerId, data) {
+            const container = document.getElementById(containerId);
+            const hint = document.getElementById(containerId + '-hint');
+            if (hint) hint.style.display = 'none';
+            const row = document.createElement('div');
+            row.className = 'cmd-row';
+            row.innerHTML = `
+                <span class="cmd-indicator">&rsaquo;</span>
+                <input type="text" class="cmd-value cmd-input" placeholder="发送值" value="${escapeHtml(data?.value || '')}">
+                <span class="cmd-arrow">&rarr;</span>
+                <input type="text" class="cmd-label cmd-input" placeholder="说明 (AI根据这个理解何时使用)" value="${escapeHtml(data?.label || '')}">
+                <button type="button" onclick="this.parentElement.remove(); updateCmdHint('${containerId}')" class="cmd-remove">&times;</button>
+            `;
+            container.appendChild(row);
+        }
+
+        function updateCmdHint(containerId) {
+            const container = document.getElementById(containerId);
+            const hint = document.getElementById(containerId + '-hint');
+            if (hint) hint.style.display = container.children.length === 0 ? '' : 'none';
+        }
+
+        function collectCmds(containerId) {
+            const rows = document.querySelectorAll(`#${containerId} .cmd-row`);
+            const cmds = [];
+            rows.forEach(row => {
+                const value = row.querySelector('.cmd-value').value.trim();
+                const label = row.querySelector('.cmd-label').value.trim();
+                if (value) cmds.push({ value, label: label || value });
+            });
+            return cmds;
+        }
+
+        function fillCmdRows(containerId, cmds) {
+            const container = document.getElementById(containerId);
+            container.innerHTML = '';
+            (cmds || []).forEach(cmd => addCmdRow(containerId, cmd));
+            updateCmdHint(containerId);
+        }
+
+        function showAddTool() {
+            document.getElementById('tool-modal-title').textContent = '添加工具';
+            document.getElementById('tool-modal-id').value = '';
+            document.getElementById('tool-name').value = '';
+            document.getElementById('tool-type').value = 'mqtt_publish';
+            document.getElementById('tool-desc').value = '';
+            document.getElementById('mqtt-pub-topic').value = '';
+            document.getElementById('mqtt-pub-template').value = '';
+            document.getElementById('mqtt-pub-cmds').innerHTML = '';
+            document.getElementById('mqtt-sub-topic').value = '';
+            document.getElementById('mqtt-sub-jsonpath').value = '';
+            document.getElementById('http-method').value = 'GET';
+            document.getElementById('http-url').value = '';
+            document.getElementById('http-cmds').innerHTML = '';
+            ['mqtt-pub-cmds-hint', 'http-cmds-hint'].forEach(id => {
+                const el = document.getElementById(id);
+                if (el) el.style.display = '';
+            });
+            updateToolConfigUI();
+            document.getElementById('tool-modal').classList.remove('hidden');
+        }
+
+        function updateToolConfigUI() {
+            const type = document.getElementById('tool-type').value;
+            document.querySelectorAll('.tool-config').forEach(el => el.classList.add('hidden'));
+            if (type === 'mqtt_publish') document.getElementById('config-mqtt-publish').classList.remove('hidden');
+            else if (type === 'mqtt_subscribe') document.getElementById('config-mqtt-subscribe').classList.remove('hidden');
+            else if (type === 'http_request') document.getElementById('config-http-request').classList.remove('hidden');
+        }
+
+        async function editTool(toolId) {
+            try {
+                const tool = await api(`/api/projects/${currentProject.id}/tools/${toolId}`);
+                document.getElementById('tool-modal-title').textContent = '编辑工具';
+                document.getElementById('tool-modal-id').value = tool.id;
+                document.getElementById('tool-name').value = tool.name;
+                document.getElementById('tool-type').value = tool.tool_type;
+                document.getElementById('tool-desc').value = tool.description || '';
+                const cfg = tool.config || {};
+                if (tool.tool_type === 'mqtt_publish') {
+                    document.getElementById('mqtt-pub-topic').value = cfg.topic || '';
+                    document.getElementById('mqtt-pub-template').value = cfg.payload_template || '';
+                    const cmds = (cfg.commands || []).map(c => ({ value: c.value, label: c.label }));
+                    fillCmdRows('mqtt-pub-cmds', cmds);
+                } else if (tool.tool_type === 'mqtt_subscribe') {
+                    document.getElementById('mqtt-sub-topic').value = cfg.topic || '';
+                    document.getElementById('mqtt-sub-jsonpath').value = cfg.json_path || '';
+                } else if (tool.tool_type === 'http_request') {
+                    document.getElementById('http-method').value = cfg.method || 'GET';
+                    document.getElementById('http-url').value = cfg.url || '';
+                    const cmds = (cfg.commands || []).map(c => ({ value: c.value, label: c.label }));
+                    fillCmdRows('http-cmds', cmds);
+                }
+                updateToolConfigUI();
+                document.getElementById('tool-modal').classList.remove('hidden');
+            } catch (err) {
+                showToast(err.message, 'error');
+            }
+        }
+
+        async function saveTool(e) {
+            e.preventDefault();
+            const type = document.getElementById('tool-type').value;
+            let config = {};
+            if (type === 'mqtt_publish') {
+                const commands = collectCmds('mqtt-pub-cmds');
+                const payloadTemplate = document.getElementById('mqtt-pub-template').value.trim();
+                config = { topic: document.getElementById('mqtt-pub-topic').value, commands };
+                if (payloadTemplate) config.payload_template = payloadTemplate;
+            } else if (type === 'mqtt_subscribe') {
+                const jsonPath = document.getElementById('mqtt-sub-jsonpath').value.trim();
+                config = { topic: document.getElementById('mqtt-sub-topic').value };
+                if (jsonPath) config.json_path = jsonPath;
+            } else if (type === 'http_request') {
+                const commands = collectCmds('http-cmds');
+                config = { url: document.getElementById('http-url').value, method: document.getElementById('http-method').value, commands };
+            }
+            const body = {
+                name: document.getElementById('tool-name').value,
+                description: document.getElementById('tool-desc').value || null,
+                tool_type: type,
+                config,
+            };
+            const toolId = document.getElementById('tool-modal-id').value;
+            try {
+                if (toolId) {
+                    await api(`/api/projects/${currentProject.id}/tools/${toolId}`, { method: 'PUT', body: JSON.stringify(body) });
+                    showToast('工具已更新');
+                } else {
+                    await api(`/api/projects/${currentProject.id}/tools`, { method: 'POST', body: JSON.stringify(body) });
+                    showToast('工具已添加');
+                }
+                closeModal('tool-modal');
+                await loadTools();
+            } catch (err) {
+                showToast(err.message, 'error');
+            }
+        }
+
+        async function deleteTool(toolId) {
+            if (!confirm('确定要删除此工具吗？')) return;
+            try {
+                await api(`/api/projects/${currentProject.id}/tools/${toolId}`, { method: 'DELETE' });
+                showToast('工具已删除');
+                await loadTools();
+            } catch (err) {
+                showToast(err.message, 'error');
+            }
+        }
+
+        function connectLogWebSocket(projectId) {
+            if (logWs) { logWs.close(); logWs = null; }
+            const wsProtocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+            const wsUrl = `${wsProtocol}//${location.host}/api/projects/${projectId}/logs`;
+            logWs = new WebSocket(wsUrl);
+            const statusEl = document.getElementById('ws-status');
+            logWs.onopen = () => {
+                statusEl.innerHTML = '<span class="ws-dot ws-dot-connected"></span>已连接';
+                statusEl.className = 'ws-status ws-connected';
+            };
+            logWs.onmessage = (event) => {
+                try {
+                    const data = JSON.parse(event.data);
+                    if (data.type === 'log') {
+                        appendLog(data.level, data.message, data.timestamp);
+                    } else if (data.type === 'status') {
+                        if (currentProject && currentProject.id === data.project_id) {
+                            currentProject.is_running = data.is_running;
+                            updateStatusBadge();
+                        }
+                    }
+                } catch {}
+            };
+            logWs.onclose = () => {
+                statusEl.innerHTML = '<span class="ws-dot ws-dot-disconnected"></span>未连接';
+                statusEl.className = 'ws-status ws-disconnected';
+            };
+            logWs.onerror = () => {
+                statusEl.innerHTML = '<span class="ws-dot ws-dot-error"></span>连接错误';
+                statusEl.className = 'ws-status ws-error';
+            };
+        }
+
+        function appendLog(level, message, timestamp) {
+            if (logPaused) return;
+            const container = document.getElementById('log-content');
+            const placeholder = container.querySelector('.log-placeholder');
+            if (placeholder) placeholder.remove();
+            const levelColors = { DEBUG: 'log-level-DEBUG', INFO: 'log-level-INFO', WARN: 'log-level-WARN', ERROR: 'log-level-ERROR', MQTT: 'log-level-MQTT' };
+            const time = new Date(timestamp).toLocaleTimeString();
+            const div = document.createElement('div');
+            div.className = 'log-line';
+            div.innerHTML = `<span class="log-time">${time}</span><span class="log-level ${levelColors[level] || 'log-level-INFO'}">[${level}]</span><span class="log-message">${escapeHtml(message)}</span>`;
+            container.appendChild(div);
+            const logContainer = document.getElementById('log-container');
+            logContainer.scrollTop = logContainer.scrollHeight;
+            if (container.children.length > 500) container.removeChild(container.firstChild);
+        }
+
+        let logPaused = false;
+        let pendingLogCount = 0;
+
+        function toggleLogPause() {
+            logPaused = !logPaused;
+            const btn = document.getElementById('log-pause-btn');
+            if (logPaused) {
+                btn.textContent = '▶ 继续';
+                btn.classList.add('paused');
+            } else {
+                btn.textContent = '⏸ 暂停';
+                btn.classList.remove('paused');
+                const logContainer = document.getElementById('log-container');
+                logContainer.scrollTop = logContainer.scrollHeight;
+            }
+        }
+
+        function clearLogs() {
+            document.getElementById('log-content').innerHTML = '<p class="log-placeholder">日志已清空</p>';
+        }
+
+        let dragToolId = null;
+
+        function onToolDragStart(e) {
+            dragToolId = e.currentTarget.dataset.toolId;
+            e.currentTarget.classList.add('dragging');
+            e.dataTransfer.effectAllowed = 'move';
+        }
+
+        function onToolDragOver(e) {
+            e.preventDefault();
+            e.dataTransfer.dropEffect = 'move';
+            const card = e.currentTarget;
+            if (card.dataset.toolId !== dragToolId) {
+                card.classList.add('drag-over');
+            }
+        }
+
+        function onToolDragLeave(e) {
+            e.currentTarget.classList.remove('drag-over');
+        }
+
+        async function onToolDrop(e) {
+            e.preventDefault();
+            e.currentTarget.classList.remove('drag-over');
+            const targetId = e.currentTarget.dataset.toolId;
+            if (!dragToolId || dragToolId === targetId) return;
+
+            const list = document.getElementById('tools-list');
+            const cards = Array.from(list.children);
+            const dragIdx = cards.findIndex(c => c.dataset.toolId === dragToolId);
+            const dropIdx = cards.findIndex(c => c.dataset.toolId === targetId);
+            if (dragIdx < 0 || dropIdx < 0) return;
+
+            const dragCard = cards[dragIdx];
+            if (dragIdx < dropIdx) {
+                list.insertBefore(dragCard, cards[dropIdx].nextSibling);
+            } else {
+                list.insertBefore(dragCard, cards[dropIdx]);
+            }
+
+            const newOrder = Array.from(list.children).map(c => parseInt(c.dataset.toolId));
+            try {
+                await api(`/api/projects/${currentProject.id}/tools/reorder`, {
+                    method: 'PUT',
+                    body: JSON.stringify({ tool_ids: newOrder })
+                });
+            } catch (err) {
+                showToast('排序保存失败: ' + err.message, 'error');
+            }
+        }
+
+        function onToolDragEnd(e) {
+            e.currentTarget.classList.remove('dragging');
+            document.querySelectorAll('.tool-card').forEach(c => c.classList.remove('drag-over'));
+            dragToolId = null;
+        }
+
+        function closeModal(id) {
+            document.getElementById(id).classList.add('hidden');
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text || '';
+            return div.innerHTML;
+        }
+
+        document.addEventListener('click', (e) => {
+            if (e.target.id === 'project-modal' || e.target.id === 'tool-modal') {
+                e.target.classList.add('hidden');
+            }
+        });
+
+        (async () => {
+            if (token) {
+                await loadDashboard();
+            } else {
+                loadCaptcha();
+            }
+            document.getElementById('captcha-image').addEventListener('click', loadCaptcha);
+        })();
+    </script>
+</body>
+</html>
