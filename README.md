@@ -411,7 +411,7 @@ ai-xiaozhi-mcp/
 
 ## 📄 许可证
 
-[MIT License](LICENSE) - 随便用，随便改。
+[GPL-2.0 license]
 
 ---
 
