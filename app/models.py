@@ -47,6 +47,7 @@ class Project(Base):
     owner = relationship("User", back_populates="projects")
     tools = relationship("Tool", back_populates="project", cascade="all, delete-orphan")
     logs = relationship("OperationLog", back_populates="project", cascade="all, delete-orphan")
+    tool_calls = relationship("ToolCall", back_populates="project", cascade="all, delete-orphan")
 
 
 class Tool(Base):
@@ -75,3 +76,19 @@ class OperationLog(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
 
     project = relationship("Project", back_populates="logs")
+
+
+class ToolCall(Base):
+    """工具调用历史：结构化记录每次 MCP tools/call 的执行情况"""
+    __tablename__ = "tool_calls"
+
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    project_id = Column(Integer, ForeignKey("projects.id", ondelete="CASCADE"), nullable=False)
+    tool_name = Column(String(100), nullable=False)
+    arguments = Column(JSON, nullable=True)
+    result = Column(Text, nullable=True)
+    is_error = Column(Boolean, default=False)
+    duration_ms = Column(Integer, default=0)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    project = relationship("Project", back_populates="tool_calls")

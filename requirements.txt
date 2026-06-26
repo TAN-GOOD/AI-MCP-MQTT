@@ -12,3 +12,5 @@ paho-mqtt==2.1.0
 websockets==14.1
 httpx==0.28.1
 aiomysql==0.2.0
+alembic==1.18.5
+bcrypt==4.2.1

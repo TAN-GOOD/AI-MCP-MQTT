@@ -1,8 +1,10 @@
 import os
+import time
+from collections import defaultdict, deque
 from contextlib import asynccontextmanager
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import inspect, text
 
@@ -12,6 +14,35 @@ from app.config import settings
 from app.services.log_service import log_service
 from app.services.mcp_manager import mcp_manager
 from app.services.mqtt_manager import mqtt_manager
+
+
+# ===== 通用 API 限流中间件（按 IP 滑动窗口）=====
+# 解析 "60/minute" -> 60 次 / 60 秒
+def _parse_rate(rate_str: str):
+    count, _, unit = rate_str.partition("/")
+    count = int(count)
+    unit_map = {"second": 1, "minute": 60, "hour": 3600, "day": 86400}
+    window = unit_map.get(unit, 60)
+    return count, window
+
+_RATE_COUNT, _RATE_WINDOW = _parse_rate(settings.API_RATE_LIMIT)
+_ip_hits: dict = defaultdict(deque)  # ip -> deque[timestamps]
+
+
+def _is_rate_limited(client_ip: str) -> bool:
+    now = time.time()
+    dq = _ip_hits[client_ip]
+    # 清理过期时间戳
+    while dq and now - dq[0] > _RATE_WINDOW:
+        dq.popleft()
+    if len(dq) >= _RATE_COUNT:
+        return True
+    dq.append(now)
+    return False
+
+
+# 不限流的路径前缀（静态资源、健康检查、登录/注册/刷新需要更宽松）
+_EXEMPT_PREFIXES = ("/static", "/api/health", "/api/auth/login", "/api/auth/register", "/api/auth/refresh", "/api/auth/captcha")
 
 Base.metadata.create_all(bind=engine)
 
@@ -65,6 +96,20 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.middleware("http")
+async def rate_limit_middleware(request: Request, call_next):
+    """通用 API 限流：按客户端 IP 滑动窗口限流，豁免静态资源与认证端点"""
+    path = request.url.path
+    if not path.startswith(_EXEMPT_PREFIXES):
+        client_ip = request.client.host if request.client else "unknown"
+        if _is_rate_limited(client_ip):
+            return JSONResponse(
+                status_code=429,
+                content={"detail": f"请求过于频繁，请稍后再试（限流：{settings.API_RATE_LIMIT}）"},
+            )
+    return await call_next(request)
 
 app.include_router(auth.router)
 app.include_router(projects.router)

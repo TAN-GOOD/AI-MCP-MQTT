@@ -3,8 +3,14 @@ from fastapi.responses import Response
 from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models import User
-from app.schemas import UserCreate, UserLogin, UserResponse, Token
-from app.auth import get_password_hash, verify_password, create_access_token, get_current_user
+from app.schemas import UserCreate, UserLogin, UserResponse, Token, TokenPair, RefreshTokenRequest
+from app.auth import (
+    get_password_hash, verify_password,
+    create_access_token, create_refresh_token,
+    decode_refresh_token, get_current_user,
+    TOKEN_TYPE_ACCESS,
+)
+from app.config import settings
 from app.services.captcha_service import create_captcha, verify_captcha
 from app.services.rate_limit_service import login_limiter
 
@@ -46,7 +52,7 @@ def register(user_data: UserCreate, db: Session = Depends(get_db)):
     return new_user
 
 
-@router.post("/login", response_model=Token)
+@router.post("/login", response_model=TokenPair)
 def login(user_data: UserLogin, request: Request, db: Session = Depends(get_db)):
     client_ip = request.client.host if request.client else "unknown"
 
@@ -68,8 +74,32 @@ def login(user_data: UserLogin, request: Request, db: Session = Depends(get_db))
         )
     # 登录成功，重置限流
     login_limiter.reset(client_ip, user_data.username)
-    access_token = create_access_token(data={"sub": str(user.id)})
-    return Token(access_token=access_token)
+    token_data = {"sub": str(user.id)}
+    access_token = create_access_token(data=token_data)
+    refresh_token = create_refresh_token(data=token_data)
+    return TokenPair(
+        access_token=access_token,
+        refresh_token=refresh_token,
+        expires_in=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
+    )
+
+
+@router.post("/refresh", response_model=TokenPair)
+def refresh_token(body: RefreshTokenRequest, db: Session = Depends(get_db)):
+    """用 refresh token 换取新的 access token（含新的 refresh token）"""
+    payload = decode_refresh_token(body.refresh_token)
+    user_id = payload.get("sub")
+    if user_id is None:
+        raise HTTPException(status_code=401, detail="无效的 refresh token")
+    user = db.query(User).filter(User.id == int(user_id)).first()
+    if user is None:
+        raise HTTPException(status_code=401, detail="用户不存在")
+    token_data = {"sub": str(user.id)}
+    return TokenPair(
+        access_token=create_access_token(data=token_data),
+        refresh_token=create_refresh_token(data=token_data),
+        expires_in=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
+    )
 
 
 @router.get("/me", response_model=UserResponse)

@@ -157,3 +157,41 @@ async def test_tool(
         return {"result": message or "尚未收到消息", "topic": topic}
 
     return {"message": "请通过MCP协议调用此工具进行测试"}
+
+
+class TopicTestRequest(BaseModel):
+    topic: str
+    timeout: int = 10
+
+
+@router.post("/mqtt/test-subscribe")
+async def test_mqtt_subscribe(
+    project_id: int,
+    body: TopicTestRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """临时订阅 MQTT 主题，等待 timeout 秒内收到的消息（调试用）"""
+    import asyncio
+    get_project_or_404(project_id, current_user, db)
+    mqtt_client = mqtt_manager.get_client(project_id)
+    if not mqtt_client:
+        raise HTTPException(status_code=400, detail="项目未启动，无法测试 MQTT")
+
+    topic = body.topic
+    timeout = min(max(body.timeout, 1), 30)
+
+    # 记录订阅前的缓存
+    prev_cache = dict(mqtt_client.message_cache)
+    mqtt_client.subscribe(topic)
+    # 等待消息到达
+    waited = 0
+    while waited < timeout:
+        await asyncio.sleep(1)
+        waited += 1
+        new_msgs = {k: v for k, v in mqtt_client.message_cache.items() if k not in prev_cache or prev_cache.get(k) != v}
+        if topic in new_msgs or any(topic in k for k in new_msgs):
+            return {"topic": topic, "received": True, "messages": new_msgs, "waited": waited}
+
+    # 超时也返回当前缓存
+    return {"topic": topic, "received": topic in mqtt_client.message_cache, "messages": mqtt_client.message_cache, "waited": waited}

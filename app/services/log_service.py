@@ -1,9 +1,22 @@
 import asyncio
 import json
 import time
+import logging
+import os
+from pathlib import Path
 from typing import Dict, Set, Optional, Callable, List
 from datetime import datetime
 from fastapi import WebSocket
+
+# 本地文件 fallback：DB 写入失败时落盘，避免日志丢失
+_FALLBACK_LOG_DIR = Path("logs_fallback")
+_fallback_logger = logging.getLogger("log_service_fallback")
+if not _fallback_logger.handlers:
+    _FALLBACK_LOG_DIR.mkdir(exist_ok=True)
+    _handler = logging.FileHandler(_FALLBACK_LOG_DIR / "db_failed.log", encoding="utf-8")
+    _handler.setFormatter(logging.Formatter("%(asctime)s [%(levelname)s] %(message)s"))
+    _fallback_logger.addHandler(_handler)
+    _fallback_logger.setLevel(logging.INFO)
 
 
 class LogService:
@@ -42,7 +55,7 @@ class LogService:
             await self._flush_to_db()
 
     async def _flush_to_db(self):
-        """将缓存日志批量写入数据库"""
+        """将缓存日志批量写入数据库；失败时落本地文件 fallback"""
         if not self._pending_logs:
             return
         logs_to_write = self._pending_logs
@@ -62,9 +75,12 @@ class LogService:
                 db.commit()
             finally:
                 db.close()
-        except Exception:
-            # 写库失败不影响实时日志推送；丢弃这批避免无限堆积
-            pass
+        except Exception as e:
+            # DB 写入失败：落本地文件 fallback，避免日志丢失
+            for log in logs_to_write:
+                _fallback_logger.error(
+                    f"project={log['project_id']} level={log['level']} msg={log['message']} err={e}"
+                )
 
     async def _trim_project_logs(self, project_id: int):
         """清理项目过多的历史日志"""

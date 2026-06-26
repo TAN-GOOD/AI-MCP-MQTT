@@ -64,6 +64,48 @@ services:
         max-size: "10m"
         max-file: "3"
 
+  db-backup:
+    # 数据库备份 sidecar：基于 alpine + mysql-client，每小时备份一次
+    image: alpine:3.19
+    container_name: xiaozhi-db-backup
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      # 数据库连接信息（与 db 服务保持一致）
+      MYSQL_HOST: db
+      MYSQL_USER: root
+      MYSQL_PASSWORD: ${MYSQL_ROOT_PASSWORD:-xiaozhi123456}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-xiaozhi_mcp}
+      # backup_db.sh 读取的数据库名变量
+      DB_NAME: ${MYSQL_DATABASE:-xiaozhi_mcp}
+      # cron 表达式：每小时整点执行一次
+      BACKUP_CRON: "0 * * * *"
+      # 备份保留天数
+      KEEP_DAYS: "7"
+    volumes:
+      # 只读挂载脚本目录，供容器内调用备份脚本
+      - ./scripts:/scripts:ro
+      # 挂载备份目录到宿主机，便于持久化与恢复
+      - ./backups:/backups
+    networks:
+      - xiaozhi-net
+    # 安装 mysql-client 与 bash，注册 cron 定时任务后启动 crond
+    command:
+      - sh
+      - -c
+      - |
+        apk add --no-cache mysql-client bash &&
+        echo "$$BACKUP_CRON /bin/bash /scripts/backup_db.sh >> /backups/backup.log 2>&1" > /etc/crontabs/root &&
+        crond -f -l 8
+    # 日志旋转，避免日志撑爆磁盘
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
 volumes:
   mysql_data:
 

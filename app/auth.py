@@ -11,6 +11,10 @@ from app.models import User
 
 security = HTTPBearer()
 
+# Token 类型标识
+TOKEN_TYPE_ACCESS = "access"
+TOKEN_TYPE_REFRESH = "refresh"
+
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
     return bcrypt.checkpw(
@@ -25,9 +29,18 @@ def get_password_hash(password: str) -> str:
 
 
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:
+    """生成短期 access token（默认 30 分钟）"""
     to_encode = data.copy()
     expire = datetime.utcnow() + (expires_delta or timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES))
-    to_encode.update({"exp": expire})
+    to_encode.update({"exp": expire, "type": TOKEN_TYPE_ACCESS})
+    return jwt.encode(to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
+
+
+def create_refresh_token(data: dict) -> str:
+    """生成长期 refresh token（默认 7 天），仅用于换取新的 access token"""
+    to_encode = data.copy()
+    expire = datetime.utcnow() + timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS)
+    to_encode.update({"exp": expire, "type": TOKEN_TYPE_REFRESH})
     return jwt.encode(to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
 
 
@@ -42,11 +55,27 @@ def decode_token(token: str) -> dict:
         )
 
 
+def decode_refresh_token(token: str) -> dict:
+    """解析 refresh token，校验类型"""
+    payload = decode_token(token)
+    if payload.get("type") != TOKEN_TYPE_REFRESH:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="无效的 refresh token",
+        )
+    return payload
+
+
 async def get_current_user(
     credentials: HTTPAuthorizationCredentials = Depends(security),
     db: Session = Depends(get_db),
 ) -> User:
     payload = decode_token(credentials.credentials)
+    # access token 类型校验，防止用 refresh token 访问 API
+    if payload.get("type") not in (TOKEN_TYPE_ACCESS, None):
+        # 兼容历史无 type 字段的 token，仅当不是 refresh 时放行
+        if payload.get("type") == TOKEN_TYPE_REFRESH:
+            raise HTTPException(status_code=401, detail="请使用 access token 访问 API")
     user_id = payload.get("sub")
     if user_id is None:
         raise HTTPException(status_code=401, detail="无效的认证凭据")

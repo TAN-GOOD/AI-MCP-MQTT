@@ -153,6 +153,28 @@ class MCPConnection:
         """从 config 中读取最新的工具配置（支持热更新）"""
         return self.config.get("tools_config", [])
 
+    def _record_tool_call(self, tool_name: str, arguments: dict, result: str, is_error: bool, duration_ms: int):
+        """结构化记录工具调用到数据库（同步写入，失败静默）"""
+        try:
+            from app.database import SessionLocal
+            from app.models import ToolCall
+            db = SessionLocal()
+            try:
+                db.add(ToolCall(
+                    project_id=self.project_id,
+                    tool_name=tool_name,
+                    arguments=arguments,
+                    result=result,
+                    is_error=is_error,
+                    duration_ms=duration_ms,
+                ))
+                db.commit()
+            finally:
+                db.close()
+        except Exception:
+            # 记录失败不影响主流程
+            pass
+
     async def _handle_message(self, message: str) -> str:
         try:
             msg = json.loads(message)
@@ -214,6 +236,8 @@ class MCPConnection:
                         break
 
                 if not tool_config:
+                    # 记录失败调用
+                    self._record_tool_call(tool_name, arguments, "工具不存在", True, 0)
                     return json.dumps({
                         "jsonrpc": "2.0", "id": msg_id,
                         "result": {
@@ -222,7 +246,16 @@ class MCPConnection:
                         }
                     })
 
+                start_ts = time.time()
                 result = await self._execute_tool(tool_config, arguments)
+                duration_ms = int((time.time() - start_ts) * 1000)
+                # 结构化记录调用历史
+                result_text = ""
+                is_error = result.get("isError", False)
+                for c in result.get("content", []):
+                    if c.get("type") == "text":
+                        result_text += c.get("text", "")
+                self._record_tool_call(tool_name, arguments, result_text[:2000], is_error, duration_ms)
                 return json.dumps({
                     "jsonrpc": "2.0", "id": msg_id,
                     "result": result
@@ -379,6 +412,10 @@ class MCPConnection:
         url = config.get("url", "")
         method = config.get("method", "GET").upper()
         command = arguments.get("command", "")
+        # 自定义请求头（如 Home Assistant 的 Authorization: Bearer xxx）
+        custom_headers = config.get("headers") or {}
+        # 请求体模板：支持 {{command}} 占位符
+        body_template = config.get("body_template")
 
         # SSRF 防护：校验 URL
         if not _is_url_safe(url):
@@ -398,13 +435,21 @@ class MCPConnection:
 
         async with httpx.AsyncClient(timeout=30) as client:
             if method == "GET":
-                response = await client.get(url, params={"command": command})
+                response = await client.get(url, params={"command": command}, headers=custom_headers)
             elif method == "POST":
-                response = await client.post(url, json={"command": command})
+                if body_template:
+                    payload = body_template.replace("{{command}}", command)
+                    response = await client.post(url, content=payload, headers=custom_headers)
+                else:
+                    response = await client.post(url, json={"command": command}, headers=custom_headers)
             elif method == "PUT":
-                response = await client.put(url, json={"command": command})
+                if body_template:
+                    payload = body_template.replace("{{command}}", command)
+                    response = await client.put(url, content=payload, headers=custom_headers)
+                else:
+                    response = await client.put(url, json={"command": command}, headers=custom_headers)
             elif method == "DELETE":
-                response = await client.delete(url, params={"command": command})
+                response = await client.delete(url, params={"command": command}, headers=custom_headers)
             else:
                 return {
                     "content": [{"type": "text", "text": f"不支持的HTTP方法: {method}"}],

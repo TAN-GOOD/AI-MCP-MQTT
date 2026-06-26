@@ -50,3 +50,10 @@ skills-lock.json
 *.tmp
 *.bak
 COMMIT_MSG.txt
+
+# 备份文件（保留目录，忽略备份内容）
+backups/*
+!backups/.gitkeep
+
+# 日志 fallback 目录
+logs_fallback/

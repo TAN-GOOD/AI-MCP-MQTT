@@ -1163,7 +1163,7 @@
                         </div>
                         <div class="form-group">
                             <label class="form-label">工具类型 <span class="required">*</span></label>
-                            <select id="tool-type" required onchange="updateToolConfigUI()" class="input select">
+                            <select id="tool-type" required onchange="onToolTypeChange()" class="input select">
                                 <option value="mqtt_publish">发送MQTT消息</option>
                                 <option value="mqtt_subscribe">读取MQTT消息</option>
                                 <option value="http_request">调用HTTP接口</option>
@@ -1175,73 +1175,18 @@
                         <input type="text" id="tool-desc" class="input" placeholder="描述这个工具的功能，AI会根据描述决定何时调用">
                     </div>
 
-                    <!-- MQTT Publish Config -->
-                    <div id="config-mqtt-publish" class="tool-config tool-config-section">
-                        <h4 class="tool-config-title tool-config-title-accent">MQTT发送命令</h4>
-                        <div class="form-group">
-                            <label class="form-label">发布主题 <span class="required">*</span></label>
-                            <input type="text" id="mqtt-pub-topic" class="input" placeholder="例如: device/light/control">
+                    <!-- 工具配置：可视化表单 + 高级JSON模式 -->
+                    <div class="form-group">
+                        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+                            <label class="form-label" style="margin-bottom:0">工具配置</label>
+                            <button type="button" id="tool-config-toggle" onclick="toggleToolConfigMode()" class="cmd-add">高级模式 (JSON)</button>
                         </div>
-                        <div>
-                            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
-                                <label class="form-label" style="margin-bottom:0">命令选项</label>
-                                <button type="button" onclick="addCmdRow('mqtt-pub-cmds')" class="cmd-add">+ 添加命令</button>
-                            </div>
-                            <p class="form-hint" style="margin-bottom:10px">添加设备支持的命令，AI会根据用户语音自动选择发送</p>
-                            <div id="mqtt-pub-cmds"></div>
-                            <div id="mqtt-pub-cmds-hint" class="cmd-hint">↑ 点击上方「添加命令」开始配置</div>
-                        </div>
-                        <div class="form-group" style="margin-top:12px">
-                            <label class="form-label">JSON 消息模板 <span style="color:var(--text-tertiary)">(可选)</span></label>
-                            <input type="text" id="mqtt-pub-template" class="input" placeholder='例如: {"state":"{{command}}","device":"light"}'>
-                            <p class="form-hint">用 <code style="background:var(--surface);padding:1px 4px;border-radius:3px">{<!-- -->{command}}</code> 作为命令占位符。留空则直接发送命令文本。</p>
-                        </div>
-                    </div>
-
-                    <!-- MQTT Subscribe Config -->
-                    <div id="config-mqtt-subscribe" class="tool-config hidden tool-config-section">
-                        <h4 class="tool-config-title tool-config-title-success">MQTT读取数据</h4>
-                        <div class="form-group">
-                            <label class="form-label">订阅主题 <span class="required">*</span></label>
-                            <input type="text" id="mqtt-sub-topic" class="input" placeholder="例如: device/sensor/data">
-                        </div>
-                        <div class="form-group">
-                            <label class="form-label">JsonPath 提取 <span style="color:var(--text-tertiary)">(可选)</span></label>
-                            <input type="text" id="mqtt-sub-jsonpath" class="input" placeholder="例如: $.data.temperature">
-                            <p class="form-hint">如果设备返回 JSON 数据，可用 JsonPath 提取特定字段。支持 <code style="background:var(--surface);padding:1px 4px;border-radius:3px">$.key.subkey</code> 和 <code style="background:var(--surface);padding:1px 4px;border-radius:3px">$.key[0]</code> 语法。留空返回原始消息。</p>
-                        </div>
-                        <div class="tool-config-info">
-                            <span class="tool-config-info-icon">ℹ</span>
-                            <p>系统会自动订阅该主题并缓存最新消息。当用户对小智说"查看温度"时，AI会调用此工具获取最新数据。</p>
-                        </div>
-                    </div>
-
-                    <!-- HTTP Request Config -->
-                    <div id="config-http-request" class="tool-config hidden tool-config-section">
-                        <h4 class="tool-config-title tool-config-title-warning">HTTP调用接口</h4>
-                        <div class="form-grid-2">
-                            <div class="form-group">
-                                <label class="form-label">方法</label>
-                                <select id="http-method" class="input select">
-                                    <option value="GET">GET</option>
-                                    <option value="POST">POST</option>
-                                    <option value="PUT">PUT</option>
-                                    <option value="DELETE">DELETE</option>
-                                </select>
-                            </div>
-                            <div class="form-group">
-                                <label class="form-label">接口地址 <span class="required">*</span></label>
-                                <input type="text" id="http-url" class="input" placeholder="https://api.example.com/control">
-                            </div>
-                        </div>
-                        <div>
-                            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
-                                <label class="form-label" style="margin-bottom:0">命令选项</label>
-                                <button type="button" onclick="addCmdRow('http-cmds')" class="cmd-add">+ 添加命令</button>
-                            </div>
-                            <p class="form-hint" style="margin-bottom:10px">添加接口支持的命令，AI会根据用户语音自动选择发送</p>
-                            <div id="http-cmds"></div>
-                            <div id="http-cmds-hint" class="cmd-hint">↑ 点击上方「添加命令」开始配置</div>
+                        <!-- 可视化表单区域（默认显示，按 tool_type 动态渲染） -->
+                        <div id="tool-config-visual"></div>
+                        <!-- JSON 文本框（高级模式，默认隐藏） -->
+                        <div id="tool-config-json-wrap" class="hidden">
+                            <textarea id="tool-config-json" class="input" rows="12" placeholder='{"topic":"device/light/control","commands":[{"value":"on","label":"开灯"}]}' style="font-family:'JetBrains Mono','Fira Code','Cascadia Code','Consolas',monospace;font-size:12px;resize:vertical;width:100%;box-sizing:border-box"></textarea>
+                            <p class="form-hint">直接编辑 JSON 配置。切回可视化模式时会尝试解析并回填表单。</p>
                         </div>
                     </div>
 
@@ -1262,15 +1207,63 @@
     <script>
         const API_BASE = '';
         let token = localStorage.getItem('token');
+        let refreshToken = localStorage.getItem('refresh_token');
         let currentUser = null;
         let currentProject = null;
         let allProjects = []; // 项目缓存，用于前端搜索过滤
         let logWs = null;
+        let _refreshing = null; // 正在进行的 refresh 请求（避免并发刷新）
+
+        // 用 refresh_token 换取新的 access/refresh token
+        async function doRefresh() {
+            if (!refreshToken) return false;
+            if (_refreshing) return _refreshing; // 复用进行中的刷新
+            _refreshing = (async () => {
+                try {
+                    const r = await fetch(`${API_BASE}/api/auth/refresh`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ refresh_token: refreshToken })
+                    });
+                    if (!r.ok) return false;
+                    const data = await r.json();
+                    token = data.access_token;
+                    refreshToken = data.refresh_token;
+                    localStorage.setItem('token', token);
+                    localStorage.setItem('refresh_token', refreshToken);
+                    return true;
+                } catch {
+                    return false;
+                } finally {
+                    _refreshing = null;
+                }
+            })();
+            return _refreshing;
+        }
 
         function api(path, options = {}) {
             const headers = { 'Content-Type': 'application/json', ...options.headers };
             if (token) headers['Authorization'] = `Bearer ${token}`;
             return fetch(`${API_BASE}${path}`, { ...options, headers }).then(async r => {
+                // 401 且不是登录/注册/刷新接口：尝试用 refresh_token 续期并重试一次
+                if (r.status === 401 && path !== '/api/auth/login' && path !== '/api/auth/register' && path !== '/api/auth/refresh') {
+                    const ok = await doRefresh();
+                    if (ok) {
+                        // 用新 token 重试原请求
+                        headers['Authorization'] = `Bearer ${token}`;
+                        const r2 = await fetch(`${API_BASE}${path}`, { ...options, headers });
+                        const data2 = await r2.json();
+                        if (r2.status === 401) {
+                            logout();
+                            throw new Error(data2.detail || '认证已过期，请重新登录');
+                        }
+                        if (!r2.ok) throw new Error(data2.detail || data2.message || '请求失败');
+                        return data2;
+                    }
+                    logout();
+                    const data = await r.json().catch(() => ({}));
+                    throw new Error(data.detail || '认证已过期，请重新登录');
+                }
                 const data = await r.json();
                 if (r.status === 401) {
                     if (path === '/api/auth/login' || path === '/api/auth/register') {
@@ -1311,7 +1304,9 @@
                     body: JSON.stringify({ username: document.getElementById('login-username').value, password: document.getElementById('login-password').value })
                 });
                 token = data.access_token;
+                refreshToken = data.refresh_token;
                 localStorage.setItem('token', token);
+                localStorage.setItem('refresh_token', refreshToken);
                 await loadDashboard();
             } catch (err) {
                 showAuthError(err.message);
@@ -1375,8 +1370,10 @@
 
         function logout() {
             token = null;
+            refreshToken = null;
             currentUser = null;
             localStorage.removeItem('token');
+            localStorage.removeItem('refresh_token');
             if (logWs) { logWs.close(); logWs = null; }
             document.getElementById('auth-page').classList.remove('hidden');
             document.getElementById('dashboard-page').classList.add('hidden');
@@ -1776,28 +1773,222 @@
             document.getElementById('tool-name').value = '';
             document.getElementById('tool-type').value = 'mqtt_publish';
             document.getElementById('tool-desc').value = '';
-            document.getElementById('mqtt-pub-topic').value = '';
-            document.getElementById('mqtt-pub-template').value = '';
-            document.getElementById('mqtt-pub-cmds').innerHTML = '';
-            document.getElementById('mqtt-sub-topic').value = '';
-            document.getElementById('mqtt-sub-jsonpath').value = '';
-            document.getElementById('http-method').value = 'GET';
-            document.getElementById('http-url').value = '';
-            document.getElementById('http-cmds').innerHTML = '';
-            ['mqtt-pub-cmds-hint', 'http-cmds-hint'].forEach(id => {
-                const el = document.getElementById(id);
-                if (el) el.style.display = '';
-            });
-            updateToolConfigUI();
+            // 重置为可视化模式
+            toolConfigAdvancedMode = false;
+            document.getElementById('tool-config-visual').classList.remove('hidden');
+            document.getElementById('tool-config-json-wrap').classList.add('hidden');
+            document.getElementById('tool-config-toggle').textContent = '高级模式 (JSON)';
+            document.getElementById('tool-config-json').value = '';
+            // 动态渲染 mqtt_publish 的可视化表单（表单字段初始为空）
+            renderToolConfigForm('mqtt_publish');
             document.getElementById('tool-modal').classList.remove('hidden');
         }
 
-        function updateToolConfigUI() {
+        // ===== 工具配置可视化编辑器 =====
+        let toolConfigAdvancedMode = false; // 是否处于高级(JSON)模式
+
+        // 根据工具类型动态渲染可视化配置表单
+        function renderToolConfigForm(toolType) {
+            const container = document.getElementById('tool-config-visual');
+            let html = '';
+            if (toolType === 'mqtt_publish') {
+                // MQTT 发送命令：topic + payload_template + commands
+                html = `
+                    <div class="tool-config-section">
+                        <h4 class="tool-config-title tool-config-title-accent">MQTT发送命令</h4>
+                        <div class="form-group">
+                            <label class="form-label">发布主题 <span class="required">*</span></label>
+                            <input type="text" id="mqtt-pub-topic" class="input" placeholder="例如: device/light/control">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">JSON 消息模板 <span style="color:var(--text-tertiary)">(可选)</span></label>
+                            <input type="text" id="mqtt-pub-template" class="input" placeholder='例如: {"state":"{{command}}","device":"light"}'>
+                            <p class="form-hint">用 <code style="background:var(--surface);padding:1px 4px;border-radius:3px">{{command}}</code> 作为命令占位符。留空则直接发送命令文本。</p>
+                        </div>
+                        <div>
+                            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+                                <label class="form-label" style="margin-bottom:0">命令选项</label>
+                                <button type="button" onclick="addCmdRow('mqtt-pub-cmds')" class="cmd-add">+ 添加命令</button>
+                            </div>
+                            <p class="form-hint" style="margin-bottom:10px">添加设备支持的命令，AI会根据用户语音自动选择发送</p>
+                            <div id="mqtt-pub-cmds"></div>
+                            <div id="mqtt-pub-cmds-hint" class="cmd-hint">↑ 点击上方「添加命令」开始配置</div>
+                        </div>
+                    </div>`;
+            } else if (toolType === 'mqtt_subscribe') {
+                // MQTT 读取数据：topic + json_path
+                html = `
+                    <div class="tool-config-section">
+                        <h4 class="tool-config-title tool-config-title-success">MQTT读取数据</h4>
+                        <div class="form-group">
+                            <label class="form-label">订阅主题 <span class="required">*</span></label>
+                            <input type="text" id="mqtt-sub-topic" class="input" placeholder="例如: device/sensor/data">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">JsonPath 提取 <span style="color:var(--text-tertiary)">(可选)</span></label>
+                            <input type="text" id="mqtt-sub-jsonpath" class="input" placeholder="例如: $.data.temperature">
+                            <p class="form-hint">如果设备返回 JSON 数据，可用 JsonPath 提取特定字段。支持 <code style="background:var(--surface);padding:1px 4px;border-radius:3px">$.key.subkey</code> 和 <code style="background:var(--surface);padding:1px 4px;border-radius:3px">$.key[0]</code> 语法。留空返回原始消息。</p>
+                        </div>
+                        <div class="tool-config-info">
+                            <span class="tool-config-info-icon">ℹ</span>
+                            <p>系统会自动订阅该主题并缓存最新消息。当用户对小智说"查看温度"时，AI会调用此工具获取最新数据。</p>
+                        </div>
+                    </div>`;
+            } else if (toolType === 'http_request') {
+                // HTTP 调用接口：method + url + headers + body_template + commands
+                html = `
+                    <div class="tool-config-section">
+                        <h4 class="tool-config-title tool-config-title-warning">HTTP调用接口</h4>
+                        <div class="form-grid-2">
+                            <div class="form-group">
+                                <label class="form-label">方法</label>
+                                <select id="http-method" class="input select">
+                                    <option value="GET">GET</option>
+                                    <option value="POST">POST</option>
+                                    <option value="PUT">PUT</option>
+                                    <option value="DELETE">DELETE</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">接口地址 <span class="required">*</span></label>
+                                <input type="text" id="http-url" class="input" placeholder="https://api.example.com/control">
+                            </div>
+                        </div>
+                        <div>
+                            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+                                <label class="form-label" style="margin-bottom:0">请求头</label>
+                                <button type="button" onclick="addHeaderRow('http-headers')" class="cmd-add">+ 添加Header</button>
+                            </div>
+                            <div id="http-headers"></div>
+                        </div>
+                        <div class="form-group" style="margin-top:12px">
+                            <label class="form-label">请求体模板 <span style="color:var(--text-tertiary)">(可选)</span></label>
+                            <input type="text" id="http-body" class="input" placeholder='例如: {"action":"{{command}}"}'>
+                        </div>
+                        <div>
+                            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+                                <label class="form-label" style="margin-bottom:0">命令选项</label>
+                                <button type="button" onclick="addCmdRow('http-cmds')" class="cmd-add">+ 添加命令</button>
+                            </div>
+                            <p class="form-hint" style="margin-bottom:10px">添加接口支持的命令，AI会根据用户语音自动选择发送</p>
+                            <div id="http-cmds"></div>
+                            <div id="http-cmds-hint" class="cmd-hint">↑ 点击上方「添加命令」开始配置</div>
+                        </div>
+                    </div>`;
+            }
+            container.innerHTML = html;
+        }
+
+        // 编辑工具时把现有 config 填充到可视化表单
+        function fillToolConfigForm(config) {
             const type = document.getElementById('tool-type').value;
-            document.querySelectorAll('.tool-config').forEach(el => el.classList.add('hidden'));
-            if (type === 'mqtt_publish') document.getElementById('config-mqtt-publish').classList.remove('hidden');
-            else if (type === 'mqtt_subscribe') document.getElementById('config-mqtt-subscribe').classList.remove('hidden');
-            else if (type === 'http_request') document.getElementById('config-http-request').classList.remove('hidden');
+            const cfg = config || {};
+            if (type === 'mqtt_publish') {
+                document.getElementById('mqtt-pub-topic').value = cfg.topic || '';
+                document.getElementById('mqtt-pub-template').value = cfg.payload_template || '';
+                fillCmdRows('mqtt-pub-cmds', (cfg.commands || []).map(c => ({ value: c.value, label: c.label })));
+            } else if (type === 'mqtt_subscribe') {
+                document.getElementById('mqtt-sub-topic').value = cfg.topic || '';
+                document.getElementById('mqtt-sub-jsonpath').value = cfg.json_path || '';
+            } else if (type === 'http_request') {
+                document.getElementById('http-method').value = cfg.method || 'GET';
+                document.getElementById('http-url').value = cfg.url || '';
+                document.getElementById('http-body').value = cfg.body_template || '';
+                fillHeaderRows('http-headers', cfg.headers || {});
+                fillCmdRows('http-cmds', (cfg.commands || []).map(c => ({ value: c.value, label: c.label })));
+            }
+        }
+
+        // 从可视化表单收集数据组装成 config 对象
+        function collectToolConfig() {
+            const type = document.getElementById('tool-type').value;
+            const config = {};
+            if (type === 'mqtt_publish') {
+                config.topic = document.getElementById('mqtt-pub-topic').value;
+                const payloadTemplate = document.getElementById('mqtt-pub-template').value.trim();
+                if (payloadTemplate) config.payload_template = payloadTemplate;
+                config.commands = collectCmds('mqtt-pub-cmds');
+            } else if (type === 'mqtt_subscribe') {
+                config.topic = document.getElementById('mqtt-sub-topic').value;
+                const jsonPath = document.getElementById('mqtt-sub-jsonpath').value.trim();
+                if (jsonPath) config.json_path = jsonPath;
+            } else if (type === 'http_request') {
+                config.url = document.getElementById('http-url').value;
+                config.method = document.getElementById('http-method').value;
+                const bodyTemplate = document.getElementById('http-body').value.trim();
+                if (bodyTemplate) config.body_template = bodyTemplate;
+                config.headers = collectHeaders('http-headers');
+                config.commands = collectCmds('http-cmds');
+            }
+            return config;
+        }
+
+        // 切换可视化 / 高级(JSON) 模式
+        function toggleToolConfigMode() {
+            toolConfigAdvancedMode = !toolConfigAdvancedMode;
+            const visual = document.getElementById('tool-config-visual');
+            const jsonWrap = document.getElementById('tool-config-json-wrap');
+            const jsonField = document.getElementById('tool-config-json');
+            const toggleBtn = document.getElementById('tool-config-toggle');
+            if (toolConfigAdvancedMode) {
+                // 切到高级模式：把当前可视化表单数据序列化到 JSON 文本框
+                try {
+                    jsonField.value = JSON.stringify(collectToolConfig(), null, 2);
+                } catch (e) {
+                    // 收集失败则保留已有 JSON 内容
+                }
+                visual.classList.add('hidden');
+                jsonWrap.classList.remove('hidden');
+                toggleBtn.textContent = '可视化模式';
+            } else {
+                // 切回可视化模式：尝试解析 JSON 并回填表单
+                try {
+                    fillToolConfigForm(JSON.parse(jsonField.value || '{}'));
+                } catch (e) {
+                    showToast('JSON 解析失败，已保留可视化表单原样', 'error');
+                }
+                visual.classList.remove('hidden');
+                jsonWrap.classList.add('hidden');
+                toggleBtn.textContent = '高级模式 (JSON)';
+            }
+        }
+
+        // tool_type 下拉框切换时重新渲染表单
+        function onToolTypeChange() {
+            renderToolConfigForm(document.getElementById('tool-type').value);
+            // 切换类型后清空 JSON 内容，避免与新类型字段不一致
+            document.getElementById('tool-config-json').value = '';
+        }
+
+        // ===== HTTP 请求头列表编辑器（复用 .cmd-row 样式，key+value） =====
+        function addHeaderRow(containerId, data) {
+            const container = document.getElementById(containerId);
+            const row = document.createElement('div');
+            row.className = 'cmd-row';
+            row.innerHTML = `
+                <input type="text" class="cmd-value cmd-input" placeholder="Header 名" value="${escapeHtml(data?.key || '')}">
+                <span class="cmd-arrow">:</span>
+                <input type="text" class="cmd-label cmd-input" placeholder="Header 值" value="${escapeHtml(data?.value || '')}">
+                <button type="button" onclick="this.parentElement.remove()" class="cmd-remove">&times;</button>
+            `;
+            container.appendChild(row);
+        }
+
+        function collectHeaders(containerId) {
+            const rows = document.querySelectorAll(`#${containerId} .cmd-row`);
+            const headers = {};
+            rows.forEach(row => {
+                const key = row.querySelector('.cmd-value').value.trim();
+                const value = row.querySelector('.cmd-label').value.trim();
+                if (key) headers[key] = value;
+            });
+            return headers;
+        }
+
+        function fillHeaderRows(containerId, headers) {
+            const container = document.getElementById(containerId);
+            container.innerHTML = '';
+            Object.entries(headers || {}).forEach(([key, value]) => addHeaderRow(containerId, { key, value }));
         }
 
         async function editTool(toolId) {
@@ -1808,22 +1999,15 @@
                 document.getElementById('tool-name').value = tool.name;
                 document.getElementById('tool-type').value = tool.tool_type;
                 document.getElementById('tool-desc').value = tool.description || '';
-                const cfg = tool.config || {};
-                if (tool.tool_type === 'mqtt_publish') {
-                    document.getElementById('mqtt-pub-topic').value = cfg.topic || '';
-                    document.getElementById('mqtt-pub-template').value = cfg.payload_template || '';
-                    const cmds = (cfg.commands || []).map(c => ({ value: c.value, label: c.label }));
-                    fillCmdRows('mqtt-pub-cmds', cmds);
-                } else if (tool.tool_type === 'mqtt_subscribe') {
-                    document.getElementById('mqtt-sub-topic').value = cfg.topic || '';
-                    document.getElementById('mqtt-sub-jsonpath').value = cfg.json_path || '';
-                } else if (tool.tool_type === 'http_request') {
-                    document.getElementById('http-method').value = cfg.method || 'GET';
-                    document.getElementById('http-url').value = cfg.url || '';
-                    const cmds = (cfg.commands || []).map(c => ({ value: c.value, label: c.label }));
-                    fillCmdRows('http-cmds', cmds);
-                }
-                updateToolConfigUI();
+                // 重置为可视化模式并按类型渲染表单
+                toolConfigAdvancedMode = false;
+                document.getElementById('tool-config-visual').classList.remove('hidden');
+                document.getElementById('tool-config-json-wrap').classList.add('hidden');
+                document.getElementById('tool-config-toggle').textContent = '高级模式 (JSON)';
+                renderToolConfigForm(tool.tool_type);
+                fillToolConfigForm(tool.config || {});
+                // 同步 JSON 文本框以备切换到高级模式
+                document.getElementById('tool-config-json').value = JSON.stringify(tool.config || {}, null, 2);
                 document.getElementById('tool-modal').classList.remove('hidden');
             } catch (err) {
                 showToast(err.message, 'error');
@@ -1833,19 +2017,18 @@
         async function saveTool(e) {
             e.preventDefault();
             const type = document.getElementById('tool-type').value;
-            let config = {};
-            if (type === 'mqtt_publish') {
-                const commands = collectCmds('mqtt-pub-cmds');
-                const payloadTemplate = document.getElementById('mqtt-pub-template').value.trim();
-                config = { topic: document.getElementById('mqtt-pub-topic').value, commands };
-                if (payloadTemplate) config.payload_template = payloadTemplate;
-            } else if (type === 'mqtt_subscribe') {
-                const jsonPath = document.getElementById('mqtt-sub-jsonpath').value.trim();
-                config = { topic: document.getElementById('mqtt-sub-topic').value };
-                if (jsonPath) config.json_path = jsonPath;
-            } else if (type === 'http_request') {
-                const commands = collectCmds('http-cmds');
-                config = { url: document.getElementById('http-url').value, method: document.getElementById('http-method').value, commands };
+            let config;
+            if (toolConfigAdvancedMode) {
+                // 高级模式：从 JSON 文本框读取
+                try {
+                    config = JSON.parse(document.getElementById('tool-config-json').value || '{}');
+                } catch (err) {
+                    showToast('JSON 格式错误: ' + err.message, 'error');
+                    return;
+                }
+            } else {
+                // 可视化模式：从表单收集
+                config = collectToolConfig();
             }
             const body = {
                 name: document.getElementById('tool-name').value,
@@ -1899,8 +2082,11 @@
             }
         }
 
+        let logWsHeartbeat = null; // WebSocket 心跳定时器
+
         function connectLogWebSocket(projectId) {
             if (logWs) { logWs.close(); logWs = null; }
+            if (logWsHeartbeat) { clearInterval(logWsHeartbeat); logWsHeartbeat = null; }
             const wsProtocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
             const token = localStorage.getItem('token') || '';
             const wsUrl = `${wsProtocol}//${location.host}/api/projects/${projectId}/logs?token=${encodeURIComponent(token)}`;
@@ -1909,6 +2095,12 @@
             logWs.onopen = () => {
                 statusEl.innerHTML = '<span class="ws-dot ws-dot-connected"></span>已连接';
                 statusEl.className = 'ws-status ws-connected';
+                // 启动心跳：每 30 秒发一次 ping，60 秒无响应会被服务端断开
+                logWsHeartbeat = setInterval(() => {
+                    if (logWs && logWs.readyState === WebSocket.OPEN) {
+                        logWs.send('ping');
+                    }
+                }, 30000);
             };
             logWs.onmessage = (event) => {
                 try {
@@ -1920,12 +2112,15 @@
                             currentProject.is_running = data.is_running;
                             updateStatusBadge();
                         }
+                    } else if (data.type === 'pong') {
+                        // 心跳响应，无需处理
                     }
                 } catch {}
             };
             logWs.onclose = () => {
                 statusEl.innerHTML = '<span class="ws-dot ws-dot-disconnected"></span>未连接';
                 statusEl.className = 'ws-status ws-disconnected';
+                if (logWsHeartbeat) { clearInterval(logWsHeartbeat); logWsHeartbeat = null; }
             };
             logWs.onerror = () => {
                 statusEl.innerHTML = '<span class="ws-dot ws-dot-error"></span>连接错误';
