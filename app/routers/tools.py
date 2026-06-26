@@ -6,6 +6,7 @@ from app.database import get_db
 from app.models import User, Project, Tool
 from app.schemas import ToolCreate, ToolUpdate, ToolResponse
 from app.auth import get_current_user
+from app.routers.deps import get_project_or_404, build_tools_config, sync_tools_to_running
 from app.services.mcp_manager import mcp_manager
 from app.services.mqtt_manager import mqtt_manager
 
@@ -16,17 +17,8 @@ class ToolReorderRequest(BaseModel):
     tool_ids: List[int]
 
 
-def get_project_or_404(project_id: int, user: User, db: Session) -> Project:
-    project = db.query(Project).filter(
-        Project.id == project_id, Project.user_id == user.id
-    ).first()
-    if not project:
-        raise HTTPException(status_code=404, detail="项目不存在")
-    return project
-
-
 @router.get("", response_model=List[ToolResponse])
-async def list_tools(
+def list_tools(
     project_id: int,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
@@ -37,7 +29,7 @@ async def list_tools(
 
 
 @router.put("/reorder")
-async def reorder_tools(
+def reorder_tools(
     project_id: int,
     body: ToolReorderRequest,
     current_user: User = Depends(get_current_user),
@@ -53,7 +45,7 @@ async def reorder_tools(
 
 
 @router.post("", response_model=ToolResponse)
-async def create_tool(
+def create_tool(
     project_id: int,
     tool_data: ToolCreate,
     current_user: User = Depends(get_current_user),
@@ -78,26 +70,12 @@ async def create_tool(
     db.commit()
     db.refresh(new_tool)
 
-    if mcp_manager.is_running(project_id):
-        tools = db.query(Tool).filter(Tool.project_id == project_id).all()
-        tools_config = [
-            {
-                "name": t.name,
-                "description": t.description or "",
-                "tool_type": t.tool_type,
-                "config": t.config or {},
-            }
-            for t in tools
-        ]
-        conn = mcp_manager.get_connection(project_id)
-        if conn:
-            conn.update_tools(tools_config)
+    sync_tools_to_running(db, project_id)
 
     return new_tool
 
-
 @router.get("/{tool_id}", response_model=ToolResponse)
-async def get_tool(
+def get_tool(
     project_id: int,
     tool_id: int,
     current_user: User = Depends(get_current_user),
@@ -111,7 +89,7 @@ async def get_tool(
 
 
 @router.put("/{tool_id}", response_model=ToolResponse)
-async def update_tool(
+def update_tool(
     project_id: int,
     tool_id: int,
     tool_data: ToolUpdate,
@@ -129,26 +107,13 @@ async def update_tool(
     db.commit()
     db.refresh(tool)
 
-    if mcp_manager.is_running(project_id):
-        tools = db.query(Tool).filter(Tool.project_id == project_id).all()
-        tools_config = [
-            {
-                "name": t.name,
-                "description": t.description or "",
-                "tool_type": t.tool_type,
-                "config": t.config or {},
-            }
-            for t in tools
-        ]
-        conn = mcp_manager.get_connection(project_id)
-        if conn:
-            conn.update_tools(tools_config)
+    sync_tools_to_running(db, project_id)
 
     return tool
 
 
 @router.delete("/{tool_id}")
-async def delete_tool(
+def delete_tool(
     project_id: int,
     tool_id: int,
     current_user: User = Depends(get_current_user),
@@ -162,20 +127,7 @@ async def delete_tool(
     db.delete(tool)
     db.commit()
 
-    if mcp_manager.is_running(project_id):
-        tools = db.query(Tool).filter(Tool.project_id == project_id).all()
-        tools_config = [
-            {
-                "name": t.name,
-                "description": t.description or "",
-                "tool_type": t.tool_type,
-                "config": t.config or {},
-            }
-            for t in tools
-        ]
-        conn = mcp_manager.get_connection(project_id)
-        if conn:
-            conn.update_tools(tools_config)
+    sync_tools_to_running(db, project_id)
 
     return {"message": "工具已删除"}
 

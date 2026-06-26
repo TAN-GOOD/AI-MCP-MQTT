@@ -101,7 +101,6 @@ class MQTTClientWrapper:
     def _on_message(self, client, userdata, message):
         try:
             payload = message.payload.decode('utf-8')
-            print(f"[MQTT DEBUG] 收到消息: topic={message.topic}, payload={payload}")
             self.message_cache[message.topic] = payload
             loop = self._get_loop()
             asyncio.run_coroutine_threadsafe(

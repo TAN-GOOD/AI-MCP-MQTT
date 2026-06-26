@@ -4,13 +4,54 @@ import ssl
 import time
 import traceback
 import random
+import ipaddress
+import socket
 from typing import Dict, Optional, Any, List
+from urllib.parse import urlparse
 import websockets
 import httpx
 
+from app.config import settings
 from app.services.log_service import log_service
 from app.services.mqtt_manager import mqtt_manager
 from app.services.json_path import parse_json_path, try_parse_json
+
+
+def _is_url_safe(url: str) -> bool:
+    """校验 URL 是否安全（防止 SSRF 攻击）"""
+    try:
+        parsed = urlparse(url)
+    except Exception:
+        return False
+
+    # 只允许 http/https
+    if parsed.scheme not in ("http", "https"):
+        return False
+
+    hostname = parsed.hostname
+    if not hostname:
+        return False
+
+    # 解析主机名对应 IP（可能直接是 IP 字面量）
+    try:
+        # 如果 hostname 是 IP 字面量
+        ip = ipaddress.ip_address(hostname)
+    except ValueError:
+        # 域名，解析为 IP
+        try:
+            infos = socket.getaddrinfo(hostname, None)
+            ips = {ipaddress.ip_address(info[4][0]) for info in infos}
+        except Exception:
+            return False
+    else:
+        ips = {ip}
+
+    # 拒绝私网/环回/链路本地/保留地址
+    for ip in ips:
+        if ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_reserved or ip.is_multicast:
+            return False
+
+    return True
 
 
 class MCPConnection:
@@ -108,7 +149,11 @@ class MCPConnection:
 
         return mcp_tools
 
-    async def _handle_message(self, message: str, tools_config: list) -> str:
+    def _get_tools_config(self) -> list:
+        """从 config 中读取最新的工具配置（支持热更新）"""
+        return self.config.get("tools_config", [])
+
+    async def _handle_message(self, message: str) -> str:
         try:
             msg = json.loads(message)
             method = msg.get("method")
@@ -142,7 +187,7 @@ class MCPConnection:
                 return ""
 
             elif method == "tools/list":
-                tools = self._build_tools(tools_config)
+                tools = self._build_tools(self._get_tools_config())
                 await log_service.broadcast(
                     self.project_id, "INFO",
                     f"返回工具列表: {[t['name'] for t in tools]}"
@@ -163,7 +208,7 @@ class MCPConnection:
                 )
 
                 tool_config = None
-                for t in tools_config:
+                for t in self._get_tools_config():
                     if t["name"] == tool_name:
                         tool_config = t
                         break
@@ -335,6 +380,17 @@ class MCPConnection:
         method = config.get("method", "GET").upper()
         command = arguments.get("command", "")
 
+        # SSRF 防护：校验 URL
+        if not _is_url_safe(url):
+            await log_service.broadcast(
+                self.project_id, "ERROR",
+                f"HTTP请求被拒绝（安全策略）：URL 不允许访问内网/保留地址: {url}"
+            )
+            return {
+                "content": [{"type": "text", "text": f"URL 不允许访问: {url}"}],
+                "isError": True
+            }
+
         await log_service.broadcast(
             self.project_id, "INFO",
             f"调用HTTP接口: {method} {url}, 命令={command}"
@@ -371,14 +427,14 @@ class MCPConnection:
             "isError": response.status_code >= 400
         }
 
-    async def start(self, tools_config: list):
+    async def start(self):
         if self.running:
             return
 
         self.running = True
-        self.task = asyncio.create_task(self._run(tools_config))
+        self.task = asyncio.create_task(self._run())
 
-    async def _run(self, tools_config: list):
+    async def _run(self):
         mcp_endpoint = self.config.get("mcp_endpoint", "")
         if not mcp_endpoint:
             await log_service.broadcast(self.project_id, "ERROR", "MCP接入点地址为空")
@@ -398,9 +454,14 @@ class MCPConnection:
             try:
                 ssl_context = None
                 if mcp_endpoint.startswith('wss://'):
-                    ssl_context = ssl.create_default_context()
-                    ssl_context.check_hostname = False
-                    ssl_context.verify_mode = ssl.CERT_NONE
+                    if settings.MCP_ALLOW_INSECURE:
+                        # 仅在显式开启时跳过证书校验（自签证书场景）
+                        ssl_context = ssl.create_default_context()
+                        ssl_context.check_hostname = False
+                        ssl_context.verify_mode = ssl.CERT_NONE
+                    else:
+                        # 默认：开启证书校验
+                        ssl_context = ssl.create_default_context()
 
                 async with websockets.connect(
                     mcp_endpoint,
@@ -423,7 +484,7 @@ class MCPConnection:
                             break
                         for line in str(message).strip().split('\n'):
                             if line.strip():
-                                response = await self._handle_message(line.strip(), tools_config)
+                                response = await self._handle_message(line.strip())
                                 if response:
                                     await ws.send(response)
 
@@ -502,7 +563,7 @@ class MCPManager:
         conn = MCPConnection(project_id, project_config)
         conn.config["tools_config"] = tools_config
         self.connections[project_id] = conn
-        await conn.start(tools_config)
+        await conn.start()
 
     async def stop_project(self, project_id: int):
         if project_id in self.connections:

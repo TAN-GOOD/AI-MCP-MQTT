@@ -8,15 +8,30 @@ services:
       MYSQL_DATABASE: xiaozhi_mcp
       MYSQL_CHARACTER_SET_SERVER: utf8mb4
       MYSQL_COLLATION_SERVER: utf8mb4_unicode_ci
-    ports:
-      - "3306:3306"
+    # 不向宿主机暴露 3306，仅容器内网通信，缩小攻击面
+    # ports:
+    #   - "3306:3306"
     volumes:
       - mysql_data:/var/lib/mysql
+    networks:
+      - xiaozhi-net
     healthcheck:
       test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-p$$MYSQL_ROOT_PASSWORD"]
       interval: 10s
       timeout: 5s
       retries: 5
+    # 资源限制：避免单容器吃光宿主机内存/CPU
+    deploy:
+      resources:
+        limits:
+          memory: 512m
+          cpus: '1'
+    # 日志旋转，避免日志撑爆磁盘
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
 
   app:
     build: .
@@ -26,11 +41,33 @@ services:
       - "8000:8000"
     environment:
       DATABASE_URL: mysql+pymysql://root:xiaozhi123456@db:3306/xiaozhi_mcp
-      SECRET_KEY: change-this-to-a-random-string-in-production
+      # 生产部署请修改为随机密钥：python -c "import secrets;print(secrets.token_hex(32))"
+      SECRET_KEY: ${SECRET_KEY:-please-change-this-secret-key-in-production-7f3a9b2c8e1d}
       ACCESS_TOKEN_EXPIRE_MINUTES: "1440"
+      MCP_ALLOW_INSECURE: "false"
+      CORS_ORIGINS: "*"
     depends_on:
       db:
         condition: service_healthy
+    networks:
+      - xiaozhi-net
+    # 资源限制：避免单容器吃光宿主机内存/CPU
+    deploy:
+      resources:
+        limits:
+          memory: 512m
+          cpus: '1'
+    # 日志旋转，避免日志撑爆磁盘
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
 
 volumes:
   mysql_data:
+
+networks:
+  # 独立网络：db 与 app 互通，外部容器默认无法访问
+  xiaozhi-net:
+    driver: bridge

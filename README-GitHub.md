@@ -141,6 +141,121 @@ docker exec xiaozhi-app python init_db.py
 
 ---
 
+## 🔒 HTTPS / 反向代理配置
+
+**为什么生产环境需要 HTTPS？**
+
+- **登录凭据不裸奔**：本平台用 JWT 登录，HTTP 明文传输时账号密码和 Token 会被中间人轻松窃听
+- **浏览器安全特性受限**：HTTP 下无法使用剪贴板、地理定位、Service Worker、Secure Cookie 等能力
+- **MCP / WebSocket 安全**：小智 MCP 接入点通常是 `wss://`（加密），混合内容会被浏览器拦截
+- **合规与信任**：HTTPS + 小绿锁是用户识别"正规服务"的最直接信号，Let's Encrypt 证书完全免费
+
+生产环境建议：**反向代理统一接管 80/443 → 转发到容器 8000 端口**，由反代负责 TLS 终止、证书续期、限流。
+
+### 方案 A：Caddy（推荐，自动 HTTPS）
+
+Caddy 会自动向 Let's Encrypt 申请并续期证书，零配置即可上 HTTPS。
+
+`Caddyfile` 示例（把 `mcp.yourdomain.com` 换成你的域名）：
+
+```caddyfile
+mcp.yourdomain.com {
+    # 反向代理到本平台的 8000 端口
+    reverse_proxy localhost:8000
+
+    # 压缩与超时（可选）
+    encode zstd gzip
+    handle_errors {
+        respond "服务异常，请稍后重试" 502
+    }
+}
+```
+
+启动：
+
+```bash
+# 1. 安装 Caddy（Ubuntu/Debian）
+sudo apt install -y caddy
+
+# 2. 把上面的 Caddyfile 放到 /etc/caddy/Caddyfile
+sudo cp Caddyfile /etc/caddy/Caddyfile
+
+# 3. 重启 Caddy，它会自动申请证书并启用 HTTPS
+sudo systemctl restart caddy
+
+# 4. 防火墙放行 80/443
+sudo ufw allow 80,443/tcp
+```
+
+> ✅ Caddy 启动后会自动把 80 跳转到 443，证书到期前自动续期，无需任何 cron。
+
+### 方案 B：Nginx + Let's Encrypt（certbot）
+
+适合已有 Nginx 站点、需要精细控制路由的部署。
+
+**第一步：安装 Nginx 和 certbot**
+
+```bash
+sudo apt update
+sudo apt install -y nginx certbot python3-certbot-nginx
+```
+
+**第二步：配置 Nginx 反代**
+
+新建 `/etc/nginx/sites-available/xiaozhi-mcp`：
+
+```nginx
+server {
+    listen 80;
+    server_name mcp.yourdomain.com;  # 换成你的域名
+
+    # 上传体积限制（按需调整）
+    client_max_body_size 16m;
+
+    location / {
+        proxy_pass http://127.0.0.1:8000;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+
+        # WebSocket 支持（实时日志、MCP 接入需要）
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+
+        # 超时设置（长连接场景）
+        proxy_read_timeout 86400s;
+        proxy_send_timeout 86400s;
+    }
+}
+```
+
+启用站点并申请证书：
+
+```bash
+# 1. 软链启用站点
+sudo ln -s /etc/nginx/sites-available/xiaozhi-mcp /etc/nginx/sites-enabled/
+sudo nginx -t && sudo systemctl reload nginx
+
+# 2. 申请 Let's Encrypt 证书（会自动改写 Nginx 配置加 TLS）
+sudo certbot --nginx -d mcp.yourdomain.com
+
+# 3. 测试自动续期
+sudo certbot renew --dry-run
+```
+
+> ✅ certbot 默认会安装 systemd timer 自动续期，无需手动维护。
+
+### 反代之后还需要做什么？
+
+1. **docker-compose.yml 不用动**：app 仍监听 8000，反代负责对外 443
+2. **CORS_ORIGINS 改成你的域名**：把 `CORS_ORIGINS: "*"` 改为 `CORS.yourdomain.com,https://mcp.yourdomain.com`
+3. **MCP_ALLOW_INSECURE 保持 `false`**：反代已提供 HTTPS，应用层不需要降级到不安全模式
+4. **如需仅本地访问 8000**：把 `ports: - "8000:8000"` 改为 `ports: - "127.0.0.1:8000:8000"`，外网只能走 443
+
+---
+
 ## 📋 使用指南
 
 ### 1️⃣ 注册登录

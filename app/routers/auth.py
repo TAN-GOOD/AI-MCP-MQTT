@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Request
 from fastapi.responses import Response
 from sqlalchemy.orm import Session
 from app.database import get_db
@@ -6,6 +6,7 @@ from app.models import User
 from app.schemas import UserCreate, UserLogin, UserResponse, Token
 from app.auth import get_password_hash, verify_password, create_access_token, get_current_user
 from app.services.captcha_service import create_captcha, verify_captcha
+from app.services.rate_limit_service import login_limiter
 
 router = APIRouter(prefix="/api/auth", tags=["认证"])
 
@@ -46,13 +47,27 @@ def register(user_data: UserCreate, db: Session = Depends(get_db)):
 
 
 @router.post("/login", response_model=Token)
-def login(user_data: UserLogin, db: Session = Depends(get_db)):
+def login(user_data: UserLogin, request: Request, db: Session = Depends(get_db)):
+    client_ip = request.client.host if request.client else "unknown"
+
+    # 登录限流：检查是否被锁定
+    if login_limiter.is_locked(client_ip, user_data.username):
+        remaining = login_limiter.remaining_lockout(client_ip, user_data.username)
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail=f"登录失败次数过多，已锁定，请 {remaining} 秒后再试"
+        )
+
     user = db.query(User).filter(User.username == user_data.username).first()
     if not user or not verify_password(user_data.password, user.password_hash):
+        # 记录失败
+        login_limiter.record_failure(client_ip, user_data.username)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="用户名或密码错误"
         )
+    # 登录成功，重置限流
+    login_limiter.reset(client_ip, user_data.username)
     access_token = create_access_token(data={"sub": str(user.id)})
     return Token(access_token=access_token)
 

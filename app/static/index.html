@@ -986,7 +986,10 @@
                 <div id="projects-view">
                     <div class="section-header">
                         <h2 class="section-title">我的项目</h2>
-                        <button onclick="showCreateProject()" class="btn btn-primary">新建项目</button>
+                        <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+                            <input type="text" id="project-search" class="input" style="width:260px" placeholder="搜索项目名称或描述..." oninput="filterProjects()">
+                            <button onclick="showCreateProject()" class="btn btn-primary">新建项目</button>
+                        </div>
                     </div>
                     <div id="projects-list" class="projects-grid"></div>
                     <div id="no-projects" class="hidden empty-state">
@@ -1069,12 +1072,13 @@
                         <div class="log-header">
                             <h3 class="panel-title" style="margin-bottom:0">实时日志</h3>
                             <div style="display:flex;align-items:center;gap:12px">
-                                <span id="ws-status" class="ws-status ws-disconnected">
-                                    <span class="ws-dot ws-dot-disconnected"></span>未连接
-                                </span>
-                                <button onclick="clearLogs()" class="btn btn-secondary btn-sm">清空</button>
-                                <button onclick="toggleLogPause()" id="log-pause-btn" class="log-pause-btn">⏸ 暂停</button>
-                            </div>
+                            <span id="ws-status" class="ws-status ws-disconnected">
+                                <span class="ws-dot ws-dot-disconnected"></span>未连接
+                            </span>
+                            <button onclick="exportLogs()" class="log-pause-btn" title="导出日志为 .txt 文件">⬇ 导出</button>
+                            <button onclick="clearLogs()" class="btn btn-secondary btn-sm">清空</button>
+                            <button onclick="toggleLogPause()" id="log-pause-btn" class="log-pause-btn">⏸ 暂停</button>
+                        </div>
                         </div>
                         <div id="log-container" class="log-container">
                             <div id="log-content">
@@ -1095,6 +1099,14 @@
                 </div>
                 <form onsubmit="saveProject(event)">
                     <input type="hidden" id="modal-project-id">
+                    <input type="hidden" id="modal-template-key" value="">
+                    <div class="form-group" id="template-selector-group">
+                        <label class="form-label">快速模板（可选）</label>
+                        <select id="modal-template" class="select" onchange="applyTemplateSelection()">
+                            <option value="">— 不使用模板 —</option>
+                        </select>
+                        <div class="form-hint" id="template-hint">选择模板可自动预填项目信息和工具</div>
+                    </div>
                     <div class="form-group">
                         <label class="form-label">项目名称 <span class="required">*</span></label>
                         <input type="text" id="modal-name" required class="input" placeholder="我的IoT项目">
@@ -1252,6 +1264,7 @@
         let token = localStorage.getItem('token');
         let currentUser = null;
         let currentProject = null;
+        let allProjects = []; // 项目缓存，用于前端搜索过滤
         let logWs = null;
 
         function api(path, options = {}) {
@@ -1395,37 +1408,77 @@
             `).join('');
             try {
                 const projects = await api('/api/projects');
-                if (projects.length === 0) {
-                    list.innerHTML = '';
-                    noProjects.classList.remove('hidden');
-                    return;
-                }
-                noProjects.classList.add('hidden');
-                list.innerHTML = projects.map(p => `
-                    <div class="project-card" onclick="openProject(${p.id})">
-                        <div class="project-card-header">
-                            <h3 class="project-card-title">${escapeHtml(p.name)}</h3>
-                            <span class="status-indicator ${p.is_running ? 'status-indicator-running' : 'status-indicator-stopped'}">
-                                <span class="status-dot ${p.is_running ? 'status-dot-running' : ''}"></span>
-                                ${p.is_running ? '运行中' : '已停止'}
-                            </span>
-                        </div>
-                        <p class="project-card-desc line-clamp-2">${escapeHtml(p.description || '暂无描述')}</p>
-                        <div class="project-card-meta">
-                            <span>${p.tools.length} 个工具</span>
-                            <span>${new Date(p.created_at).toLocaleDateString()}</span>
-                        </div>
-                    </div>
-                `).join('');
+                allProjects = projects;
+                // 重置搜索框
+                const searchInput = document.getElementById('project-search');
+                if (searchInput) searchInput.value = '';
+                renderProjects(projects, false);
             } catch (err) {
                 list.innerHTML = '';
                 showToast('加载项目失败: ' + err.message, 'error');
             }
         }
 
+        // 渲染项目列表（isFiltered=true 表示是搜索过滤结果，用于切换空状态文案）
+        function renderProjects(projects, isFiltered) {
+            const list = document.getElementById('projects-list');
+            const noProjects = document.getElementById('no-projects');
+            if (projects.length === 0) {
+                list.innerHTML = '';
+                const textEl = noProjects.querySelector('.empty-state-text');
+                const btnEl = noProjects.querySelector('button');
+                if (isFiltered) {
+                    // 搜索无结果：提示无匹配，隐藏创建按钮
+                    if (textEl) textEl.textContent = '没有匹配的项目';
+                    if (btnEl) btnEl.classList.add('hidden');
+                } else {
+                    // 真正无项目：恢复原始提示
+                    if (textEl) textEl.textContent = '还没有项目，创建一个开始吧';
+                    if (btnEl) btnEl.classList.remove('hidden');
+                }
+                noProjects.classList.remove('hidden');
+                return;
+            }
+            noProjects.classList.add('hidden');
+            list.innerHTML = projects.map(p => `
+                <div class="project-card fade-in" onclick="openProject(${p.id})">
+                    <div class="project-card-header">
+                        <h3 class="project-card-title">${escapeHtml(p.name)}</h3>
+                        <span class="status-indicator ${p.is_running ? 'status-indicator-running' : 'status-indicator-stopped'}">
+                            <span class="status-dot ${p.is_running ? 'status-dot-running' : ''}"></span>
+                            ${p.is_running ? '运行中' : '已停止'}
+                        </span>
+                    </div>
+                    <p class="project-card-desc line-clamp-2">${escapeHtml(p.description || '暂无描述')}</p>
+                    <div class="project-card-meta">
+                        <span>${p.tools.length} 个工具</span>
+                        <span>${new Date(p.created_at).toLocaleDateString()}</span>
+                        <button onclick="event.stopPropagation(); editProject(${p.id})" class="btn-icon" style="width:28px;height:28px;font-size:12px;float:right" title="编辑项目">&#9998;</button>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        // 实时搜索过滤项目（按名称、描述匹配）
+        function filterProjects() {
+            const searchInput = document.getElementById('project-search');
+            if (!searchInput) return;
+            const query = searchInput.value.trim().toLowerCase();
+            if (!query) {
+                renderProjects(allProjects, false);
+                return;
+            }
+            const filtered = allProjects.filter(p =>
+                (p.name || '').toLowerCase().includes(query) ||
+                (p.description || '').toLowerCase().includes(query)
+            );
+            renderProjects(filtered, true);
+        }
+
         function showCreateProject() {
             document.getElementById('modal-title').textContent = '新建项目';
             document.getElementById('modal-project-id').value = '';
+            document.getElementById('modal-template-key').value = '';
             document.getElementById('modal-name').value = '';
             document.getElementById('modal-desc').value = '';
             document.getElementById('modal-mcp').value = '';
@@ -1433,12 +1486,69 @@
             document.getElementById('modal-mqtt-port').value = '1883';
             document.getElementById('modal-mqtt-user').value = '';
             document.getElementById('modal-mqtt-pass').value = '';
+            // 显示模板选择器并加载模板列表
+            document.getElementById('template-selector-group').classList.remove('hidden');
+            document.getElementById('modal-template').value = '';
+            loadTemplates();
             document.getElementById('project-modal').classList.remove('hidden');
+        }
+
+        async function loadTemplates() {
+            try {
+                const templates = await api('/api/projects/templates/list');
+                const select = document.getElementById('modal-template');
+                // 保留第一个占位选项
+                select.innerHTML = '<option value="">— 不使用模板 —</option>';
+                templates.forEach(t => {
+                    const opt = document.createElement('option');
+                    opt.value = t.key;
+                    opt.textContent = t.name;
+                    select.appendChild(opt);
+                });
+            } catch (err) {
+                // 模板加载失败不阻塞创建流程
+            }
+        }
+
+        // 编辑现有项目：打开 modal，预填数据并隐藏模板选择器
+        async function editProject(id) {
+            try {
+                const p = await api(`/api/projects/${id}`);
+                document.getElementById('modal-title').textContent = '编辑项目';
+                document.getElementById('modal-project-id').value = p.id;
+                document.getElementById('modal-template-key').value = '';
+                document.getElementById('modal-name').value = p.name || '';
+                document.getElementById('modal-desc').value = p.description || '';
+                document.getElementById('modal-mcp').value = p.mcp_endpoint || '';
+                document.getElementById('modal-mqtt-broker').value = p.mqtt_broker || '';
+                document.getElementById('modal-mqtt-port').value = p.mqtt_port || 1883;
+                document.getElementById('modal-mqtt-user').value = p.mqtt_username || '';
+                document.getElementById('modal-mqtt-pass').value = '';
+                // 编辑模式隐藏模板选择器（模板仅用于新建）
+                document.getElementById('template-selector-group').classList.add('hidden');
+                document.getElementById('project-modal').classList.remove('hidden');
+            } catch (err) {
+                showToast('加载项目失败: ' + err.message, 'error');
+            }
+        }
+
+        function applyTemplateSelection() {
+            const select = document.getElementById('modal-template');
+            const key = select.value;
+            document.getElementById('modal-template-key').value = key;
+            const hint = document.getElementById('template-hint');
+            if (key) {
+                const text = select.options[select.selectedIndex].textContent;
+                hint.textContent = `已选择「${text}」模板，保存后将自动创建预置工具`;
+            } else {
+                hint.textContent = '选择模板可自动预填项目信息和工具';
+            }
         }
 
         async function saveProject(e) {
             e.preventDefault();
             const id = document.getElementById('modal-project-id').value;
+            const templateKey = document.getElementById('modal-template-key').value;
             const body = {
                 name: document.getElementById('modal-name').value,
                 description: document.getElementById('modal-desc').value || null,
@@ -1452,6 +1562,10 @@
                 if (id) {
                     await api(`/api/projects/${id}`, { method: 'PUT', body: JSON.stringify(body) });
                     showToast('项目已更新');
+                } else if (templateKey) {
+                    // 基于模板创建
+                    await api(`/api/projects/templates/apply/${templateKey}`, { method: 'POST', body: JSON.stringify(body) });
+                    showToast('项目已创建（含模板工具）');
                 } else {
                     await api('/api/projects', { method: 'POST', body: JSON.stringify(body) });
                     showToast('项目已创建');
@@ -1605,6 +1719,7 @@
                             ${t.config?.payload_template ? '<span class="tool-badge tool-badge-amber" title="JSON消息模板">JSON↑</span>' : ''}
                             ${t.config?.json_path ? `<span class="tool-badge tool-badge-emerald" title="JsonPath: ${escapeHtml(t.config.json_path)}">JSON↓</span>` : ''}
                             <div class="drag-handle" title="长按拖动排序" style="cursor:grab;padding:4px 2px;font-size:14px;color:var(--text-tertiary)">☰</div>
+                            <button onclick="testTool(${t.id}, '${t.tool_type}')" class="btn-icon" style="width:30px;height:30px;font-size:13px" title="测试工具">&#9889;</button>
                             <button onclick="editTool(${t.id})" class="btn-icon" style="width:30px;height:30px;font-size:13px" title="编辑">&#9998;</button>
                             <button onclick="deleteTool(${t.id})" class="btn-icon" style="width:30px;height:30px;font-size:16px" title="删除">&times;</button>
                         </div>
@@ -1765,10 +1880,30 @@
             }
         }
 
+        // 测试工具：mqtt_subscribe 调用后端测试接口显示返回结果；mqtt_publish/http_request 提示通过小智语音测试
+        async function testTool(toolId, toolType) {
+            if (toolType === 'mqtt_subscribe') {
+                try {
+                    showToast('正在测试工具...', 'info');
+                    const data = await api(`/api/projects/${currentProject.id}/tools/${toolId}/test`, { method: 'POST' });
+                    const result = (data.result !== undefined && data.result !== null) ? String(data.result) : '(无返回结果)';
+                    const topic = data.topic || '';
+                    const display = topic ? `主题 ${topic} 返回：${result}` : `测试结果：${result}`;
+                    showToast(display, 'success');
+                } catch (err) {
+                    showToast('测试失败: ' + err.message, 'error');
+                }
+            } else {
+                // mqtt_publish / http_request 类型需通过小智语音触发
+                showToast('请通过小智语音调用此工具测试', 'info');
+            }
+        }
+
         function connectLogWebSocket(projectId) {
             if (logWs) { logWs.close(); logWs = null; }
             const wsProtocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
-            const wsUrl = `${wsProtocol}//${location.host}/api/projects/${projectId}/logs`;
+            const token = localStorage.getItem('token') || '';
+            const wsUrl = `${wsProtocol}//${location.host}/api/projects/${projectId}/logs?token=${encodeURIComponent(token)}`;
             logWs = new WebSocket(wsUrl);
             const statusEl = document.getElementById('ws-status');
             logWs.onopen = () => {
@@ -1833,6 +1968,43 @@
 
         function clearLogs() {
             document.getElementById('log-content').innerHTML = '<p class="log-placeholder">日志已清空</p>';
+        }
+
+        // 导出当前日志区域的所有日志条目为 .txt 文件下载
+        function exportLogs() {
+            const container = document.getElementById('log-content');
+            const lines = container.querySelectorAll('.log-line');
+            if (lines.length === 0) {
+                showToast('暂无日志可导出', 'warn');
+                return;
+            }
+            // 拼接日志文本：时间 [级别] 消息
+            const text = Array.from(lines).map(line => {
+                const time = line.querySelector('.log-time')?.textContent || '';
+                const level = line.querySelector('.log-level')?.textContent || '';
+                const msg = line.querySelector('.log-message')?.textContent || '';
+                return `${time} ${level} ${msg}`;
+            }).join('\n');
+            // 生成文件名：项目名_日志_YYYYMMDD_HHMM.txt
+            const now = new Date();
+            const pad = n => String(n).padStart(2, '0');
+            const dateStr = `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}`;
+            const timeStr = `${pad(now.getHours())}${pad(now.getMinutes())}`;
+            const projectName = currentProject ? (currentProject.name || 'project') : 'project';
+            // 清理文件名中的非法字符
+            const safeName = projectName.replace(/[\\/:*?"<>|]/g, '_');
+            const filename = `${safeName}_日志_${dateStr}_${timeStr}.txt`;
+            // 触发下载（带 BOM 头确保中文在记事本中正确显示）
+            const blob = new Blob(['\ufeff' + text], { type: 'text/plain;charset=utf-8' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+            showToast(`已导出 ${lines.length} 条日志`, 'success');
         }
 
         let dragToolId = null;
